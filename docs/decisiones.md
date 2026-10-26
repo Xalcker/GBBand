@@ -104,3 +104,9 @@ Decisiones menores que tomé yo, con su motivo. Las de gran tamaño se proponen 
     "Escuchar" toca el stream de la ROM (4 canales; Ruido y DPCM comparten el CH4). `Exportar a la ROM` reimporta la canción.
 13. **Pendiente de la fase 3:** `preview` (WAV de cada pista de un NSF sin .m3u: de momento se importa con `--song N` y se
     escucha en el editor), importador GBS/VGM (fase 5), keyframes y práctica (fase 4), y la prueba de sincronía después de pausar.
+14. **Efecto al fallar (de NESBand v0.3.2, pendiente en la fase 4).** Al fallar (nota que se pasó o golpe al aire) suena uno de
+    tres efectos (clank, thud, bwomp) sin repetir el anterior, en un canal de pulso que no sea el del instrumento que falla
+    (ese canal se calla al fallar). La autopista tiembla (SCX de 1-2 px) y la paleta se tiñe de rojo 6 cuadros, con 14 de
+    enfriamiento (a lo más 3 por segundo). Opción EFECTO AL FALLAR (SI / SOLO SONIDO / NO) en la pantalla de opciones; no
+    cuenta como opción que bloquee récords. Los efectos viven en `audio/efectos.txt`. Además, de la misma versión: el
+    marcador (puntaje y combo) ocupa todo el ancho de la autopista y el público de la franja no deja huecos junto a ella.
