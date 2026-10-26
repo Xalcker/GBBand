@@ -27,6 +27,10 @@ conoce SM83. Diseño en `docs/diseno.md`, decisiones en `docs/decisiones.md`.
 uv run gbband build-gfx     # src/chr/*.tiles -> build/chr/*.2bpp y PNG de contacto
 uv run gbband build-font    # regenera src/chr/font.tiles (necesita Pillow, grupo dev)
 uv run gbband smoke build/gbband.gb   # corre el ROM en DMG y CGB y deja capturas en build/smoke-*/
+uv run gbband build-gems    # regenera src/chr/gems.tiles (gemas con sus 4 desplazamientos)
+uv run gbband measure-placement   # error y conflictos de las colocaciones A y B con los charts de NESBand
+uv run python audio/demo.py # regenera la canción de prueba (src/songs/demo/: stream, charts, ficha en song.asm)
+.\build.ps1 -Colocacion A -Nombre A   # ROM con la colocación A (COLOCACION=A NOMBRE=A ./build.sh)
 ```
 
 Herramientas (en `tools/`, ignorado por git; cada máquina baja las suyas): RGBDS v1.0.4 en `tools/rgbds/`,
@@ -43,4 +47,15 @@ Mesen de pruebas: `tools\mesen\Mesen.exe --testrunner <rom absoluta> <script.lua
 - `rgbfix -p` no basta para 2 MB: hace falta que el banco 127 tenga contenido (ver `docs/decisiones.md`).
 - Mesen 2 `--testrunner`: usar rutas absolutas, `emu.memType.gameboyMemory`, y asegurarse de llamar a
   `emu.stop()` incluso si el script falla (si no, queda colgado).
+- **PowerShell 5.1 y archivos de código:** nunca usar `Get-Content`/`Set-Content` para editar fuentes (lee como ANSI y
+  escribe UTF-8 con BOM: rompe los acentos y rgbasm falla con "Invalid characters 0xEF 0xBB 0xBF"). Usar Edit/Write, o
+  `[IO.File]::ReadAllText(ruta, [Text.Encoding]::UTF8)` y `WriteAllText` con `UTF8Encoding($false)`.
+- **PyBoy: hooks y entrada.** El tick de PyBoy puede terminar a la mitad de la ISR de VBlank: para ver un estado de
+  cuadro completo, enganchar `IsrEnd` con `hook_register(0, addr, cb, ctx)`. Dentro del hook, `button_press` se pierde
+  (PyBoy vacía los eventos al final del tick): usar `send_input(WindowEvent.PRESS_..., 1)`; lo lee la ISR del cuadro `wT`.
+- **rgbasm:** `INCLUDE` dos veces el mismo `.inc` repite los `DEF ... EQU` y falla. Un caracter suelto se escribe `'0'`, no `"0"`.
+- **Alineación en WRAM:** las secciones con dirección fija (`WRAM0[$C700]`) fallan al enlazar si otra sección flotante
+  las pisa; las variables van desde `$C900`.
+- La ISR de VBlank tiene ~1140 M-cycles: la cola de VRAM debe terminar antes (`wOverrun` lo cuenta). El audio con los 4 canales
+  (18 escrituras) y la fila nueva juntos son el peor cuadro.
 - Valor de A al arrancar: `$11` en CGB, `$01` en DMG.

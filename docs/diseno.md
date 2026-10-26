@@ -56,16 +56,33 @@ WRAM: solo se usa `C000-DFFF` como un bloque único, **sin SVBK**, para que DMG 
 
 | Dirección | Contenido |
 |---|---|
-| `C000` (512 B, alineado) | ring de audio: 16 slots de 32 B (cuenta + pares registro/valor) |
-| `C200` (160 B) | OAM en sombra (origen del OAM DMA) |
-| `C300` (256 B) | cola de VRAM |
-| `C400` | sombra de registros del APU y contadores de altas de nota |
-| `C500` | buffer de la fila de la autopista |
-| `C600` en adelante | estado del jugador, chart, puntaje |
+| `C000-C3FF` | ring de audio: 16 slots de 64 B (cuenta, marca de wave RAM, wave RAM, hasta 23 pares registro/valor) |
+| `C400-C49F` | OAM en sombra (origen del OAM DMA, byte alto `$C4`) |
+| `C500-C5FF` | cola de VRAM |
+| `C710-C726` | sombra de los registros del APU (dirección = `C700` + byte bajo del registro) |
+| `C800-C827` | contadores de altas de nota (mismo índice) |
+| `C900` en adelante | variables: autopista, juez, puntaje, estadísticas de las pruebas |
+| `DF00-DFFF` | pila |
 
-HRAM: rutina de OAM DMA, banco actual, `hFrame` (16 bits), `hPad`, `hPadNew`, aviso de VBlank.
+HRAM: variables rápidas (`hFrame` de 16 bits, `hPad`, `hPadNew`, aviso de VBlank, `hScy`, `hLcdc`...) y la copia de la
+rutina de OAM DMA. El mapa exacto está en `src/wram.asm`.
+
+## Cómo funciona la autopista (fase 2)
+
+- **Tiempo.** Todo se mide en cuadros. La ISR de VBlank número `n` (`wT` = n) escribe el audio del cuadro `n - lead_in`,
+  pone el `SCY` del cuadro `n` y lee el control; una nota del chart con cuadro `F` está en la línea de golpe en la ISR `F`
+  y el audio de su nota se dispara en esa misma ISR (prueba de sincronía).
+- **Posición.** Una nota está en el fondo de 256 px en `y = 104 - F * v` (v en px/cuadro, punto fijo 8.8), y `SCY(t) = -t * v`.
+  Cada fila de tiles se arma una vez, 24 filas por debajo de la de arriba, cuando el scroll cruza un múltiplo de 8 px.
+- **Gemas.** 5 formas distintas (◀ ▼ ▶ anillo rombo) de 16x8 px con 4 variantes de desplazamiento (colocación B).
+- **Juez.** Cola de 8 notas pendientes `(cuadro, carriles)`; cada carril se acierta o se pierde por separado.
+  Acierto: `|t - F| <= 6`; golpe sin nota cerca rompe el combo; fallar o golpear al aire calla el CH1 hasta el siguiente acierto.
+- **Puntaje.** 50 x multiplicador por nota (x1 con 0-9 de combo, x2 con 10-19, x3 con 20-29, x4 desde 30).
+- **Audio.** Stream FRS en 2 bancos; el bucle principal decodifica a un ring de 16 cuadros en WRAM y la ISR solo lee de ahí.
 
 ## Estado actual
 
-Fase 1 (esqueleto): ROM "hola mundo" que prueba el header, la detección DMG/CGB, la ISR de VBlank, el cambio
-de banco (1 y 127), la SRAM con batería y la fuente. Ver [decisiones.md](decisiones.md).
+- **Fase 1** (esqueleto): ROM "hola mundo", herramientas y pruebas. Hecha.
+- **Fase 2** (rebanada vertical): menú de dificultad, una canción original de ~32 s (`audio/demo.py`), autopista con scroll,
+  Window de HUD, 5 carriles, ventana de acierto en cuadros, puntaje, combo, silencio al fallar, ISR con ring de audio y
+  cola de VRAM. Medida la colocación A contra B (ver [vram.md](vram.md)). Hecha; ver [decisiones.md](decisiones.md) para lo que queda pendiente.
