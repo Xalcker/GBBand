@@ -6,6 +6,7 @@
 #   (.sha256) y la licencia. La versión sale del archivo VERSION si no se indica.
 # NOMBRE=prueba ./build.sh deja build/gbband-prueba.gb sin pisar build/gbband.gb.
 # SOLO="patron1,patron2" queda reservado para compilar un subconjunto de canciones (fase 3); por ahora no hace nada.
+# COLOCACION=A ./build.sh elige la colocacion A de las gemas (B por omision: 4 desplazamientos verticales).
 # (Mismas opciones que build.ps1: -Release, -Version, -Nombre, -Solo.)
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -37,7 +38,8 @@ if [ $release -eq 1 ]; then base="gbband-v$version"; elif [ -n "$nombre" ]; then
 uv run --project "$root" gbband build-gfx > /dev/null
 
 obj="$out/$base.o"
-"$rgbasm" -I "$root/src" -I "$root/build" -o "$obj" "$root/src/main.asm"
+opciones=(); [ "${COLOCACION:-B}" = "A" ] && opciones=(-D PLACEMENT_B=0)
+"$rgbasm" ${opciones[@]+"${opciones[@]}"} -I "$root/src" -I "$root/build" -o "$obj" "$root/src/main.asm"
 rom="$out/$base.gb"
 "$rgblink" -n "$out/$base.sym" -m "$out/$base.map" -p 0xFF -o "$rom" "$obj"
 # Header: logo y sumas (-v), relleno $FF (-p), compatible con CGB (-c), no japones (-j), MBC5 con 8 KB de SRAM con bateria

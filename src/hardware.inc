@@ -4,6 +4,7 @@
 ; =============================================================================
 
 ; --- Control del LCD ---------------------------------------------------------
+DEF rDIV  EQU $FF04     ; contador que sube cada 256 ciclos T (64 M-cycles)
 DEF rLCDC EQU $FF40     ; control de pantalla
 DEF rSTAT EQU $FF41     ; estado y fuentes de la interrupción STAT
 DEF rSCY  EQU $FF42     ; scroll vertical del fondo

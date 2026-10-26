@@ -1,18 +1,13 @@
 ; =============================================================================
-; main.asm - GBBand, fase 1: ROM "hola mundo"
+; main.asm - GBBand: header, vectores, arranque y bucle principal
 ;
-; Comprueba lo que el resto del juego necesita: header MBC5+RAM+BATTERY y compatible con CGB, detección
-; de DMG/CGB, ISR de VBlank con contador de cuadros, cambio de banco de ROM (1 y 127), SRAM con batería
-; y texto con la fuente de 8x8 (el número de tile es el código ASCII).
+; Un solo ensamblado: este archivo incluye al resto. Ver docs/diseno.md para el mapa de memoria.
 ; =============================================================================
 
 INCLUDE "hardware.inc"
-
-; ---- HRAM: variables de acceso rápido --------------------------------------
-SECTION "HRAM", HRAM
-hIsCGB::  ds 1      ; valor de A al arrancar: $11 en Game Boy Color; en DMG es otro ($01 en la DMG original)
-hFrame::  ds 2      ; cuadros desde el arranque (16 bits, lo incrementa la ISR de VBlank)
-hBank::   ds 1      ; banco de ROM conmutable actual
+INCLUDE "constants.inc"
+INCLUDE "song_format.inc"
+INCLUDE "wram.asm"
 
 ; ---- Vectores de reinicio e interrupciones ----------------------------------
 SECTION "Vectores", ROM0[$0000]
@@ -48,127 +43,113 @@ SECTION "Header", ROM0[$0100]
 SECTION "Arranque", ROM0[$0150]
 Start:
     ldh [hIsCGB], a             ; A vale $11 al arrancar en CGB: guardarlo antes de tocar A
+    cp BOOT_A_CGB
+    ld a, 0
+    jr nz, .notCgb
+    ld a, 1
+.notCgb:
+    ldh [hCGB], a
     di
-    ld sp, $E000                ; pila al final de la WRAM
+    ld sp, $E000                ; pila en DF00-DFFF
 
     ; Apagar el LCD solo durante VBlank (hacerlo en otro momento puede dañar una DMG)
-.waitVBlank:
-    ldh a, [rLY]
-    cp 144
-    jr c, .waitVBlank
-    xor a
-    ldh [rLCDC], a
+    call LcdOff
 
-    ; Limpiar la VRAM ($8000-$9FFF)
+    ; Limpiar la WRAM (menos la pila) y las variables de HRAM
+    ld hl, $C000
+    ld bc, $1F00
+    xor a
+    call FillMem
+    ldh [hFrame], a
+    ldh [hFrame + 1], a
+    ldh [hPad], a
+    ldh [hPadNew], a
+    ldh [hVBlank], a
+    ldh [hMainBusy], a
+    ldh [hScy], a
+
+    ; Rutina de OAM DMA a HRAM
+    ld hl, hOamDma
+    ld de, OamDmaCode
+    ld b, OamDmaCodeEnd - OamDmaCode
+.copyDma:
+    ld a, [de]
+    inc de
+    ld [hl+], a
+    dec b
+    jr nz, .copyDma
+
+    ; VRAM (los dos bancos en CGB) y tiles
     ld hl, _VRAM
     ld bc, $2000
     xor a
     call FillMem
-
-    ; Cargar la fuente: el tile N es el carácter ASCII N
+    ldh a, [hCGB]
+    and a
+    jr z, .tiles
+    ld a, 1
+    ldh [rVBK], a
     ld hl, _VRAM
-    ld de, FontTiles
-    ld bc, FontTilesEnd - FontTiles
+    ld bc, $2000
+    xor a
+    call FillMem
+    xor a
+    ldh [rVBK], a
+.tiles:
+    ld hl, _VRAM
+    ld de, Tiles
+    ld bc, TilesEnd - Tiles
     call CopyMem
 
-    ; Paletas
-    ld a, %11100100
-    ldh [rBGP], a
-    ldh a, [hIsCGB]
-    cp BOOT_A_CGB
-    jr nz, .noCgbPalette
-    ld a, $80                   ; índice 0, autoincremento
-    ldh [rBCPS], a
-    ld hl, CgbPalette
-    ld b, CgbPaletteEnd - CgbPalette
-.palLoop:
-    ld a, [hl+]
-    ldh [rBCPD], a
-    dec b
-    jr nz, .palLoop
-.noCgbPalette:
+    call LoadPalettes
 
-    ; Textos: rutinas en ROM0 leen cadenas de ROM0, del banco 1 y del banco 127
-    ld de, _SCRN0 + 32 * 3 + 6
-    ld hl, TxtTitulo
-    call PrintStr
-
-    ld de, _SCRN0 + 32 * 5 + 5
-    ld hl, TxtHola
-    call PrintStr
-
-    ld de, _SCRN0 + 32 * 7 + 6
-    ldh a, [hIsCGB]
-    cp BOOT_A_CGB
-    ld hl, TxtModoCgb
-    jr z, .printModo
-    ld hl, TxtModoDmg
-.printModo:
-    call PrintStr
-
-    ; Banco 1 (primer banco conmutable)
-    ld a, 1
-    call SwitchBank
-    ld de, _SCRN0 + 32 * 9 + 4
-    ld hl, $4000
-    call PrintStr
-
-    ; Banco 127 (el último de los 2 MB)
-    ld a, 127
-    call SwitchBank
-    ld de, _SCRN0 + 32 * 10 + 4
-    ld hl, $4000
-    call PrintStr
-
-    ; SRAM con batería: escribir y leer de vuelta un valor
-    ld a, RAMG_ENABLE
-    ld [rRAMG], a
     xor a
-    ld [rRAMB], a
-    ld a, $5A
-    ld [_SRAM], a
-    ld a, [_SRAM]
-    cp $5A
-    ld hl, TxtSramOk
-    jr z, .sramPrint
-    ld hl, TxtSramFalla
-.sramPrint:
-    xor a
-    ld [rRAMG], a               ; deshabilitar la SRAM de nuevo
-    ld de, _SCRN0 + 32 * 12 + 6
-    call PrintStr
-
-    ; Encender: fondo, tiles en modo $8000, mapa $9800
+    ldh [rWY], a
+    ldh [rWX], a
+    ldh [rSCX], a
     ld a, IEF_VBLANK
     ldh [rIE], a
     xor a
-    ldh [hFrame], a
-    ldh [hFrame + 1], a
     ldh [rIF], a
-    ld a, LCDCF_ON | LCDCF_BG8000 | LCDCF_BGON
-    ldh [rLCDC], a
+    ld a, 3                     ; dificultad por omisión: experto
+    ld [wDifficulty], a
+    call EnterMenu
     ei
 
 MainLoop:
-    halt                        ; esperar la siguiente interrupción (VBlank)
-    nop                         ; (el nop después de halt evita un fallo conocido del hardware)
+    di                          ; (sin carrera entre mirar el aviso y dormir)
+    ldh a, [hVBlank]
+    and a
+    jr nz, .run
+    halt                        ; con IME apagado, halt despierta con el VBlank pendiente sin atenderlo
+    nop
+    ei
+    nop                         ; aquí se atiende la ISR
+    jr MainLoop
+.run:
+    ei
+    xor a
+    ldh [hVBlank], a
+    ld a, 1
+    ldh [hMainBusy], a
+    ld a, [wState]
+    and a
+    jr nz, .notMenu
+    call MenuFrame
+    jr .done
+.notMenu:
+    cp STATE_PLAY
+    jr nz, .notPlay
+    call PlayFrame
+    jr .done
+.notPlay:
+    call EndFrame
+.done:
+    xor a
+    ldh [hMainBusy], a
     jr MainLoop
 
-; ---- ISR de VBlank ----------------------------------------------------------
-VBlankISR:
-    push af
-    ldh a, [hFrame]
-    inc a
-    ldh [hFrame], a
-    jr nz, .done
-    ldh a, [hFrame + 1]
-    inc a
-    ldh [hFrame + 1], a
-.done:
-    pop af
-    reti
-
-; ---- Rutinas ----------------------------------------------------------------
+; ---- Utilidades --------------------------------------------------------------
 
 ; Cambia el banco de ROM conmutable ($4000-$7FFF). A = banco (0 a 255; el bit 8 queda en 0).
 SwitchBank:
@@ -202,7 +183,7 @@ CopyMem:
     jr nz, .loop
     ret
 
-; Escribe la cadena terminada en 0 de HL en la dirección DE (sin esperar al LCD: solo con el LCD apagado).
+; Escribe la cadena terminada en 0 de HL en la dirección DE (solo con el LCD apagado).
 PrintStr:
 .loop:
     ld a, [hl+]
@@ -212,27 +193,23 @@ PrintStr:
     inc de
     jr .loop
 
-; ---- Datos en ROM0 ----------------------------------------------------------
-SECTION "Datos ROM0", ROM0
-TxtTitulo:    db "GBBAND", 0
-TxtHola:      db "HOLA MUNDO", 0
-TxtModoDmg:   db "MODO DMG", 0
-TxtModoCgb:   db "MODO CGB", 0
-TxtSramOk:    db "SRAM OK", 0
-TxtSramFalla: db "SRAM FALLA", 0
+INCLUDE "isr.asm"
+INCLUDE "audio.asm"
+INCLUDE "highway.asm"
+INCLUDE "gameplay.asm"
+INCLUDE "hud.asm"
+INCLUDE "scene.asm"
+INCLUDE "game.asm"
 
-; Paleta 0 de la CGB (4 colores de 15 bits, BGR555 little-endian): blanco, gris claro, gris oscuro, negro
-CgbPalette:
-    dw $7FFF, $5EF7, $294A, $0000
-CgbPaletteEnd:
+; ---- Gráficos: todos los tiles juntos (build/chr/tiles.2bpp, ver `gbband build-gfx`) -----------------
+SECTION "Tiles", ROM0
+Tiles:
+    INCBIN "chr/tiles.2bpp"
+TilesEnd:
 
-FontTiles:
-    INCBIN "chr/font.2bpp"
-FontTilesEnd:
+; ---- Canción de prueba (bancos 16 a 18), generada por audio/demo.py ---------------------------------
+INCLUDE "songs/demo/song.asm"
 
-; ---- Mensajes en bancos conmutables (prueban el MBC5) -----------------------
-SECTION "Mensaje banco 1", ROMX[$4000], BANK[1]
-    db "BANCO 1 OK", 0
-
-SECTION "Mensaje banco 127", ROMX[$4000], BANK[127]
-    db "BANCO 127 OK", 0
+; ---- Fuerza el tamaño de 2 MB: un byte en el último banco ------------------------------------------
+SECTION "Relleno banco 127", ROMX[$7FFF], BANK[127]
+    db $FF

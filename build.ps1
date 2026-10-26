@@ -5,9 +5,10 @@
 #   (.sha256) y la licencia. La versión sale del archivo VERSION si no se indica. (Cuando haya canciones,
 #   solo entrarán las que git versiona: la música de juegos comerciales no se distribuye.)
 # -Nombre prueba deja build\gbband-prueba.gb sin pisar build\gbband.gb.
+# -Colocacion A|B elige como se colocan las gemas (B por omision: 4 desplazamientos verticales; A: una fila de tiles).
 # -Solo <patrón>[,<patrón>] queda reservado para compilar un subconjunto de canciones (fase 3); por ahora no hace nada.
-param([switch]$Release, [string]$Version = '', [string]$Nombre = '', [string[]]$Solo = @())
-$ErrorActionPreference = 'Stop'
+param([switch]$Release, [string]$Version = '', [string]$Nombre = '', [string[]]$Solo = @(), [ValidateSet('A','B')][string]$Colocacion = 'B')
+$ErrorActionPreference = 'Continue'   # (los avisos de rgbasm van a stderr: se revisa $LASTEXITCODE)
 $root = $PSScriptRoot
 if ($Release -and -not $Version) { $Version = (Get-Content (Join-Path $root 'VERSION') -TotalCount 1).Trim() }
 
@@ -35,7 +36,8 @@ $base = if ($Release) { "gbband-v$Version" } elseif ($Nombre) { "gbband-$Nombre"
 if ($LASTEXITCODE -ne 0) { Write-Host 'Error al convertir los graficos' -ForegroundColor Red; exit 1 }
 
 $obj = "$out/$base.o"
-& $rgbasm -I (Join-Path $root 'src') -I (Join-Path $root 'build') -o $obj (Join-Path $root 'src/main.asm')
+$opciones = @(); if ($Colocacion -eq 'A') { $opciones += '-D', 'PLACEMENT_B=0' }
+& $rgbasm @opciones -I (Join-Path $root 'src') -I (Join-Path $root 'build') -o $obj (Join-Path $root 'src/main.asm')
 if ($LASTEXITCODE -ne 0) { Write-Host 'Error al ensamblar' -ForegroundColor Red; exit 1 }
 
 $rom = "$out/$base.gb"
