@@ -117,7 +117,7 @@ Start:
     ld [wSong], a
     ld [wInstrument], a
     ld [wMenuRow], a
-    call EnterMenu
+    call EnterTitle
     ei
 
 MainLoop:
@@ -136,22 +136,26 @@ MainLoop:
     ldh [hVBlank], a
     ld a, 1
     ldh [hMainBusy], a
-    ld a, [wState]
-    and a
-    jr nz, .notMenu
-    call MenuFrame
-    jr .done
-.notMenu:
-    cp STATE_PLAY
-    jr nz, .notPlay
-    call PlayFrame
-    jr .done
-.notPlay:
-    call EndFrame
+    ld a, [wState]          ; despacho por la tabla de estados
+    add a
+    ld e, a
+    ld d, 0
+    ld hl, StateTable
+    add hl, de
+    ld a, [hl+]
+    ld h, [hl]
+    ld l, a
+    ld de, .done
+    push de
+    jp hl
 .done:
     xor a
     ldh [hMainBusy], a
     jr MainLoop
+
+; Un manejador por estado, en el orden de STATE_...
+StateTable:
+    dw TitleFrame, MenuFrame, PlayFrame, PauseFrame, ResultsFrame
 
 ; ---- Utilidades --------------------------------------------------------------
 
@@ -204,6 +208,7 @@ INCLUDE "gameplay.asm"
 INCLUDE "hud.asm"
 INCLUDE "scene.asm"
 INCLUDE "game.asm"
+INCLUDE "results.asm"
 
 ; ---- Gráficos: todos los tiles juntos (build/chr/tiles.2bpp, ver `gbband build-gfx`) -----------------
 SECTION "Tiles", ROM0

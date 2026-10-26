@@ -10,9 +10,18 @@ IF !DEF(PLACEMENT_B)
 ENDC
 
 ; --- Estados del juego ----------------------------------------------------------
-DEF STATE_MENU EQU 0
-DEF STATE_PLAY EQU 1
-DEF STATE_END  EQU 2
+DEF STATE_TITLE   EQU 0
+DEF STATE_MENU    EQU 1
+DEF STATE_PLAY    EQU 2
+DEF STATE_PAUSE   EQU 3
+DEF STATE_RESULTS EQU 4
+
+; --- Vida (cada acierto suma 1; perder una nota resta 2, o 1 en fácil; un golpe al aire resta 1) -------------
+DEF LIFE_MAX   EQU 40
+DEF LIFE_START EQU 28           ; dos tercios
+DEF LIFE_LOSS  EQU 2
+DEF LIFE_GRACE EQU 8            ; cuadros después de perder vida en que los fallos no cuestan más
+DEF PAUSE_WY   EQU 56           ; la Window sube a ese renglón durante la pausa y tapa la autopista
 
 ; --- Reglas ---------------------------------------------------------------------
 DEF WINDOW_FRAMES EQU 6         ; tolerancia: +-6 cuadros (~100 ms), igual que NESBand

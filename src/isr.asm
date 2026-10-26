@@ -55,6 +55,8 @@ VBlankISR:
     ldh [rSCY], a
     ldh a, [hLcdc]
     ldh [rLCDC], a
+    ldh a, [hWy]
+    ldh [rWY], a
     ; ¿terminamos dentro del VBlank? (LY 144-153). Si LY ya dio la vuelta, las escrituras de arriba pudieron perderse.
     ldh a, [rLY]
     cp 144

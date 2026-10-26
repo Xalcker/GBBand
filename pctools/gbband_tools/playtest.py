@@ -34,7 +34,9 @@ PRESS = (WindowEvent.PRESS_ARROW_LEFT, WindowEvent.PRESS_ARROW_DOWN, WindowEvent
 RELEASE = (WindowEvent.RELEASE_ARROW_LEFT, WindowEvent.RELEASE_ARROW_DOWN, WindowEvent.RELEASE_ARROW_RIGHT,
            WindowEvent.RELEASE_BUTTON_B, WindowEvent.RELEASE_BUTTON_A)
 HOLD_FRAMES = 3
-STATE_END = 2
+STATE_PLAY = 2
+STATE_PAUSE = 3
+STATE_END = 4  # la pantalla de resultados
 INSTRUMENTS = ("guitarra", "teclado", "bajo", "bateria")  # canal del APU de cada uno: CH1, CH2, CH3, CH4
 LANE_MASK = 0x1F
 
@@ -73,8 +75,8 @@ def load_song(name: str) -> SongData:
     return SongData(name, info, charts, {ch: [info["lead_in"] + f for f in frames] for ch, frames in on.items()})
 
 
-def select_in_menu(r: Runner, song: int, instrument: int, difficulty: int) -> None:
-    """Elige la canción, el instrumento y la dificultad con los botones, como un jugador (y comprueba lo elegido)."""
+def select_in_menu(r: Runner, song: int, instrument: int, difficulty: int, no_fail: bool = False) -> None:
+    """Sale del título y elige canción, instrumento, dificultad y fallo con los botones, como un jugador (y comprueba lo elegido)."""
     wait = lambda: r.tick(3)
 
     def tap(button: str) -> None:
@@ -84,6 +86,8 @@ def select_in_menu(r: Runner, song: int, instrument: int, difficulty: int) -> No
         r.tick(2)
 
     value = lambda name: r.read(name)[0]
+    tap("start")  # el título
+    assert value("wState") == 1, "el título no pasó al menú"
     for _ in range(40):
         if value("wSong") == song:
             break
@@ -102,6 +106,10 @@ def select_in_menu(r: Runner, song: int, instrument: int, difficulty: int) -> No
             break
         tap("right" if d < difficulty else "left")
     assert value("wDifficulty") == difficulty
+    if no_fail:
+        tap("down")
+        tap("right")
+        assert value("wNoFail") == 1
     wait()
 
 def expected_score(total_notes: int) -> int:
@@ -183,7 +191,49 @@ class MasherBot(Bot):
         return [l for l in range(5) if self.rng.random() < 0.5]
 
 
-BOTS = {"perfecto": PerfectBot, "sin-tocar": IdleBot, "machacando": MasherBot}
+class HumanBot(Bot):
+    """Un jugador de carne y hueso: acierta una fracción de las notas con errores en rachas (de 1 a 3 notas seguidas), toca
+    con hasta 3 cuadros de adelanto o atraso y de vez en cuando golpea al aire. Con semilla fija."""
+
+    name = "humano"
+    hit_rate = 0.9
+
+    def __init__(self, chart, seed=1):
+        super().__init__(chart, seed)
+        self.plan: dict[int, list[int]] = {}
+        miss_fraction = 1 - self.hit_rate
+        start_miss = miss_fraction / (1 + self.hit_rate)  # cada racha pierde 2 notas en promedio: aciertos = (1 - q) / (1 + q)
+        streak = 0
+        previous = -100
+        for frame, mask in chart:
+            for lane in lanes_of(mask):
+                if streak:
+                    streak -= 1
+                    continue
+                if self.rng.random() < start_miss:
+                    streak = self.rng.randint(0, 2)
+                    continue
+                when = frame + self.rng.randint(-3, 3)
+                self.plan.setdefault(when, []).append(lane)
+            if frame - previous > 40 and self.rng.random() < 0.03:  # un golpe al aire entre dos notas lejanas
+                self.plan.setdefault(frame + 18, []).append(self.rng.randrange(5))
+            previous = frame
+
+    def presses(self, t):
+        return self.plan.get(t, [])
+
+
+class Human90Bot(HumanBot):
+    name = "humano90"
+    hit_rate = 0.9
+
+
+class Human45Bot(HumanBot):
+    name = "humano45"
+    hit_rate = 0.45
+
+
+BOTS = {"perfecto": PerfectBot, "sin-tocar": IdleBot, "machacando": MasherBot, "humano90": Human90Bot, "humano45": Human45Bot}
 
 
 # ---------------------------------------------------------------------------- medición visual
@@ -274,7 +324,8 @@ def sprites_per_line(oam: bytes) -> int:
 
 
 def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, bot_name: str, out: Path,
-             visual: bool = False, shots: tuple[int, ...] = (40, 400, 1200), seed: int = 1) -> Result:
+             visual: bool = False, shots: tuple[int, ...] = (40, 400, 1200), seed: int = 1, no_fail: bool = False,
+             pause_at: int | None = None, pause_frames: int = 40) -> Result:
     data = load_song(song)
     info = data.info
     chart = data.chart(instrument, difficulty)
@@ -292,7 +343,7 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
     with Runner(rom, mode, rom.with_suffix(".sym")) as r:
         r.boot()
         r.tick(5)
-        select_in_menu(r, song_names().index(song), channel, layout.DIFFICULTIES.index(difficulty))
+        select_in_menu(r, song_names().index(song), channel, layout.DIFFICULTIES.index(difficulty), no_fail)
         assert bytes(r.read("wTitleBuf", 20)).decode("ascii").strip() == info["title"], "el menú no muestra el título de la canción"
         r.pb.button_press("start")
         r.tick(2)
@@ -306,13 +357,23 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
 
         releases: dict[int, int] = {}  # carril -> cuadro en que se suelta
         held: set[int] = set()
-        state = {"prev_on": note_on_counts(r)}
+        state = {"prev_on": note_on_counts(r), "timeline": {}, "paused": False}
+        hframe = lambda: int.from_bytes(r.read("hFrame", 2), "little")
 
         def on_isr_end(_ctx) -> None:
             """Corre al final de cada ISR de VBlank: el estado es el de un cuadro completo. `wT` ya cuenta el
             cuadro que acaba de correr (n = wT - 1); aquí se decide qué botones lee la ISR del cuadro wT."""
             t = int.from_bytes(r.read("wT", 2), "little")
             n = t - 1
+            now_h = hframe()
+            for key in [k for k in state["timeline"] if k <= now_h]:   # Start (pausa y reanudar), en cuadros reales
+                r.pb.send_input(state["timeline"].pop(key), 1)
+            if pause_at is not None and not state["paused"] and r.read("wPlaying")[0] and t == pause_at:
+                state["paused"] = True
+                state["timeline"][now_h] = WindowEvent.PRESS_BUTTON_START
+                state["timeline"][now_h + 2] = WindowEvent.RELEASE_BUTTON_START
+                state["timeline"][now_h + pause_frames] = WindowEvent.PRESS_BUTTON_START
+                state["timeline"][now_h + pause_frames + 2] = WindowEvent.RELEASE_BUTTON_START
             if r.read("wPlaying")[0] == 0:
                 return
             cur = note_on_counts(r)
@@ -357,6 +418,11 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
         result.note_on = observed_note_on
         v = result.values
         v["state"] = r.read("wState")[0]
+        v["life"] = r.read("wLife")[0]
+        v["failed"] = r.read("wFailed")[0]
+        v["pct"] = r.read("wPct")[0]
+        v["stars"] = r.read("wStars")[0]
+        v["notes_total"] = int.from_bytes(r.read("wNotesTotal", 2), "little")
         v["score"] = digits(r, "wScoreDigits", 6)
         v["max_combo"] = digits(r, "wMaxComboDigits", 3)
         v["combo"] = digits(r, "wComboDigits", 3)
@@ -403,6 +469,7 @@ def write_report(result: Result, out: Path) -> None:
         f"cuadros={result.frames} notas_chart={result.total_notes}",
         f"puntaje={v['score']} puntaje_esperado_perfecto={expected_score(result.total_notes)} porcentaje={pct:.1f} estrellas={star_count}",
         f"aciertos={v['hits']} fallos={v['misses']} golpes_al_aire={v['air']} combo_max={v['max_combo']}",
+        f"pantalla de resultados: porcentaje={v['pct']} estrellas={v['stars']} fallaste={bool(v['failed'])} vida_final={v['life']}",
         f"atrasos={v['late']} underruns_audio={v['underrun']} desbordes_cola_vram={v['vq_overflow']}",
         "",
         "presupuestos (por cuadro):",

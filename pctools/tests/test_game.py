@@ -72,6 +72,7 @@ def test_perfecto(rom_b, song, instrument, difficulty, mode):
     assert v["hits"] == r.total_notes and v["misses"] == 0 and v["air"] == 0
     assert v["max_combo"] == r.total_notes
     assert v["score"] == playtest.expected_score(r.total_notes)
+    assert v["pct"] == 100 and v["stars"] == 5 and v["notes_total"] == r.total_notes and not v["failed"]
     data = playtest.load_song(song)
     assert playtest.sync_errors(r, data.chart(instrument, difficulty)) == []
     for ch in range(4):
@@ -122,3 +123,66 @@ def test_colocacion_a_contra_b(rom_a, rom_b):
             if scheme == "B":
                 assert r.values["hits"] == r.total_notes
     (ROOT / "build" / "colocacion-a-b.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_pausa_no_pierde_la_sincronia(rom_b, mode):
+    """Pausar a media canción y seguir: el reloj se congela y todo continúa en su cuadro (puntaje exacto y las altas de nota del
+    audio caen donde dice el stream)."""
+    song = QUICK_SONGS[0]
+    data = playtest.load_song(song)
+    chart = data.chart("guitarra", "experto")
+    pause_at = chart[len(chart) // 2][0] + 20
+    r = playtest.run_case(rom_b, mode, song, "guitarra", "experto", "perfecto",
+                          out_dir(song, "perfecto-pausa", "guitarra", "experto", mode), pause_at=pause_at, pause_frames=50)
+    v = r.values
+    common_checks(r)
+    assert v["hits"] == r.total_notes and v["score"] == playtest.expected_score(r.total_notes)
+    assert playtest.sync_errors(r, chart) == []
+    for ch in range(4):
+        assert r.note_on[ch] == data.note_on[ch]
+    assert r.frames > data.info["end_frame"] + 40, "la pausa tiene que haber durado"
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_pierdes_si_se_acaba_la_vida(rom_b, mode):
+    """Sin tocar nada la vida llega a 0: pierdes, el instrumento queda callado y la pantalla de resultados lo dice."""
+    song = QUICK_SONGS[0]
+    r = playtest.run_case(rom_b, mode, song, "guitarra", "experto", "sin-tocar",
+                          out_dir(song, "sin-tocar-pierdes", "guitarra", "experto", mode))
+    v = r.values
+    assert v["failed"] == 1 and v["life"] == 0 and v["stars"] == 0 and v["pct"] == 0
+    assert r.muted_late
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_sin_fallo_no_se_puede_perder(rom_b, mode):
+    song = QUICK_SONGS[0]
+    r = playtest.run_case(rom_b, mode, song, "guitarra", "experto", "sin-tocar",
+                          out_dir(song, "sin-tocar-sinfallo", "guitarra", "experto", mode), no_fail=True)
+    v = r.values
+    assert v["failed"] == 0 and v["life"] == 28 and v["misses"] == r.total_notes
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_humano_90_termina_y_humano_45_pierde(rom_b, mode):
+    """Balance de la vida: quien acierta ~90 % (con errores en rachas) termina la canción en experto; ~45 % pierde."""
+    song = QUICK_SONGS[0]
+    good = playtest.run_case(rom_b, mode, song, "guitarra", "experto", "humano90",
+                             out_dir(song, "humano90", "guitarra", "experto", mode))
+    bad = playtest.run_case(rom_b, mode, song, "guitarra", "experto", "humano45",
+                            out_dir(song, "humano45", "guitarra", "experto", mode))
+    assert good.values["failed"] == 0, f"el jugador de 90 % perdió (vida {good.values['life']})"
+    assert 0.8 < good.values["hits"] / good.total_notes < 0.97
+    assert bad.values["failed"] == 1, "el jugador de 45 % debía perder"
+    common_checks(good)
+    common_checks(bad)
+
+
+def test_estrellas_de_la_rom_son_las_del_modelo(rom_b):
+    """El porcentaje y las estrellas que calcula la ROM coinciden con los de playtest.stars (los umbrales de NESBand)."""
+    song = QUICK_SONGS[0]
+    for bot in ("machacando", "humano90", "humano45"):
+        r = playtest.run_case(rom_b, "dmg", song, "guitarra", "experto", bot, out_dir(song, bot, "guitarra", "experto", "dmg", "-estrellas"))
+        pct, stars = playtest.stars(r.values["score"], r.total_notes)
+        assert r.values["pct"] == int(pct) and r.values["stars"] == stars, (bot, pct, stars, r.values["pct"], r.values["stars"])

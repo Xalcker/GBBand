@@ -37,7 +37,20 @@ wState::        ds 1
 wDifficulty::   ds 1     ; 0 facil, 1 medio, 2 dificil, 3 experto
 wSong::         ds 1     ; canción elegida (lugar en la lista)
 wInstrument::   ds 1     ; 0 guitarra, 1 teclado, 2 bajo, 3 bateria
-wMenuRow::      ds 1     ; renglón del menú: 0 canción, 1 instrumento, 2 dificultad
+wMenuRow::      ds 1     ; renglón del menú: 0 canción, 1 instrumento, 2 dificultad, 3 fallo
+wNoFail::       ds 1     ; 1 = "sin fallo": no se puede perder (y no hay récord)
+wLife::         ds 1
+wLifeGrace::    ds 1
+wFailed::       ds 1     ; 1 = se acabó la vida: el instrumento calla hasta el final y no hay récord
+wPct::          ds 1     ; porcentaje del puntaje máximo (0 a 100)
+wStars::        ds 1
+wDivA::         ds 3     ; dividendo y cociente de Div24By16
+wDivB::         ds 2     ; divisor
+wDivR::         ds 2     ; resto
+wNotesTotal::   ds 2     ; notas de la partida (aciertos + fallos)
+wTotalDigits::  ds 3
+wPctDigits::    ds 3
+wPerfectUnits:: ds 2     ; unidades de puntaje máximo posible con esas notas
 wSongBank::     ds 1     ; banco A de la canción elegida
 wInstrMask::    ds 1     ; instrumentos con chart en esa canción
 wTitleBuf::     ds SONG_TITLE_LEN
@@ -140,6 +153,7 @@ hVBlank::    ds 1        ; la ISR lo pone en 1; el bucle principal lo borra
 hMainBusy::  ds 1        ; 1 mientras el bucle principal trabaja (si llega un VBlank, es un cuadro atrasado)
 hScy::       ds 1
 hLcdc::      ds 1
+hWy::        ds 1        ; WY de la Window (la ISR lo copia: sube durante la pausa)
 hIsrT0::     ds 1
 hPassLY::    ds 1
 hOamDma::    ds 10       ; copia de la rutina de OAM DMA (corre desde HRAM)

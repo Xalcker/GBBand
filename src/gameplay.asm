@@ -21,6 +21,8 @@ GameplayInit:
     ld [wHeldPrev], a
     ld [wHeld], a
     ld [wAirCount], a
+    ld [wFailed], a
+    ld [wLifeGrace], a
     ld [wScoreUnits], a
     ld [wScoreUnits + 1], a
     ld hl, wScoreDigits
@@ -29,6 +31,8 @@ GameplayInit:
     ld [hl+], a
     dec b
     jr nz, .clear
+    ld a, LIFE_START
+    ld [wLife], a
     ld a, 1
     ld [wMult], a
     ld a, $03
@@ -146,6 +150,12 @@ ClassifyDiff:
 
 ; Lo que cambia por cuadro de juego: expira notas, procesa los botones nuevos y rellena la cola.
 JudgeFrame:
+    ld a, [wLifeGrace]
+    and a
+    jr z, .noGrace
+    dec a
+    ld [wLifeGrace], a
+.noGrace:
     ld a, [wT]
     sub 1
     ld [wTJ], a
@@ -379,8 +389,12 @@ HitNote:
     jr nc, .unitsDone
     inc [hl]
 .unitsDone:
-    xor a
+    call LifeGain
+    ld a, [wFailed]         ; tras perder, el instrumento no vuelve a sonar
+    and a
+    jr nz, .failed
     ld [wMuted], a
+.failed:
     ld a, $03
     ld [wHudDirty], a
     ret
@@ -388,11 +402,20 @@ HitNote:
 MissNote:
     ld hl, wMissDigits + 2
     call Inc3Digits
+    ld a, [wDifficulty]     ; perder una nota cuesta 2 de vida (1 en fácil)
+    and a
+    ld b, LIFE_LOSS
+    jr nz, .loss
+    ld b, 1
+.loss:
+    call LifeLoss
     jr BreakCombo
 
 AirStrum:
     ld hl, wAirCount
     inc [hl]
+    ld b, 1
+    call LifeLoss
 BreakCombo:
     xor a
     ld hl, wComboDigits
@@ -404,6 +427,43 @@ BreakCombo:
     ld [wMuted], a
     ld a, $03
     ld [wHudDirty], a
+    ret
+
+; ---- Vida --------------------------------------------------------------------------------------
+LifeGain:
+    ld a, [wNoFail]
+    and a
+    ret nz
+    ld a, [wLife]
+    cp LIFE_MAX
+    ret nc
+    inc a
+    ld [wLife], a
+    ret
+
+; B = cuánta vida se pierde. Tras perder vida hay un respiro de LIFE_GRACE cuadros en que los fallos no cuestan más
+; (notas repetidas en un carril que caen antes de poder tocarlas se cobran una sola vez).
+LifeLoss:
+    ld a, [wNoFail]
+    and a
+    ret nz
+    ld a, [wLifeGrace]
+    and a
+    ret nz
+    ld a, LIFE_GRACE
+    ld [wLifeGrace], a
+    ld a, [wLife]
+    sub b
+    jr nc, .store
+    xor a
+.store:
+    ld [wLife], a
+    ret nz
+    ld a, 1                 ; se acabó la vida: pierdes, el instrumento calla hasta el final
+    ld [wFailed], a
+    ld [wMuted], a
+    ld hl, wHudDirty
+    set 2, [hl]
     ret
 
 ; Suma 1 a tres dígitos decimales; HL apunta al menos significativo. Se queda en 999.

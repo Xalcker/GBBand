@@ -9,6 +9,11 @@ DEF HUD_ROW1 EQU _SCRN1 + 32          ; COMBO 000 MAX 000
 
 HudText0: db "PUNTOS 000000  X1", 0
 HudText1: db "COMBO 000 MAX 000", 0
+TxtFailed: db "FALLASTE         "
+; Más abajo en el mapa de la Window (no se ve salvo en la pausa, cuando la Window sube a PAUSE_WY)
+TxtPaused:   db "PAUSA", 0
+TxtResume:   db "START: SEGUIR", 0
+TxtQuit:     db "SELECT: SALIR", 0
 
 ; Escribe el texto fijo del HUD (LCD apagado)
 HudDraw:
@@ -17,6 +22,15 @@ HudDraw:
     call PrintStr
     ld de, HUD_ROW1
     ld hl, HudText1
+    call PrintStr
+    ld de, _SCRN1 + 32 * 3 + 7
+    ld hl, TxtPaused
+    call PrintStr
+    ld de, _SCRN1 + 32 * 5 + 3
+    ld hl, TxtResume
+    call PrintStr
+    ld de, _SCRN1 + 32 * 6 + 3
+    ld hl, TxtQuit
     jp PrintStr
 
 ; Encola UN grupo de dígitos por cuadro (el primero que haya cambiado), para no pasar de la cuota de VRAM de la ISR.
@@ -38,8 +52,22 @@ HudUpdate:
     ld b, 1
     jp QueueDigits
 .notScore:
+    bit 2, a
+    jr z, .notFail
+    res 2, a
+    ld [wHudDirty], a
+    ld hl, TxtFailed          ; "FALLASTE": reemplaza el renglón del combo
+    ld de, HUD_ROW1
+    ld b, 17
+    jp QueueRaw
+.notFail:
     bit 1, a
     jr z, .notCombo
+    ld c, a
+    ld a, [wFailed]
+    and a
+    ld a, c
+    jr nz, .notCombo          ; con la derrota ya no se actualiza el combo
     res 1, a
     ld [wHudDirty], a
     ld hl, wComboDigits
