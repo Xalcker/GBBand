@@ -1,4 +1,4 @@
-# VRAM, colocación de las notas y presupuestos (fase 2)
+# VRAM, colocación de las notas y presupuestos (fases 2 y 3)
 
 Todas las cifras de esta página salen de ejecutar el ROM (`build/test-demo-*/resultado.txt`, `build/colocacion-a-b.txt`)
 o de `uv run gbband measure-placement`. Lo medido en PyBoy 2.8.1 se cruzó con Mesen 2 2.1.1 solo en lo básico
@@ -52,27 +52,26 @@ no pueden compartir un tile). Con los charts reales de NESBand (10 canciones, gu
 tocaba no está libre, usa el más cercano que sí lo esté. Con la canción de prueba, ninguna dificultad pierde notas.
 `PLACEMENT_B=0` (`-Colocacion A`) deja la A como opción de compilación.
 
-## Presupuestos medidos (bot perfecto, experto; `resultado.txt` de cada caso)
+## Presupuestos medidos (fase 3: las 10 canciones, 4 instrumentos, DMG y CGB, 154 partidas)
 
-| Concepto | Objetivo | DMG | CGB |
-|---|---|---|---|
-| Bytes copiados a VRAM por cuadro (máximo) | ≤ 96 | 33 | 46 (fácil: 49) |
-| La cola de VRAM termina dentro del VBlank | línea ≤ 153 | línea 6 de 10 del VBlank (sin desbordes) | línea 7 de 10 (sin desbordes) |
-| ISR completa, máximo (resolución 64 M) | ≤ 1140 | 960 M | 1088 M |
-| Bucle principal, máximo / medio | ≤ 7000 (gameplay 5000 + filas y HUD 2000) | 2964 / 903 M | 3192 / 940 M |
-| Cuadros atrasados | ≤ 2 | 0 | 0 |
-| Sprites por línea (máximo) | ≤ 8 | 5 | 5 |
-| Sprites totales | ≤ 20 | 5 | 5 |
-| Subdesbordes del audio (el bucle principal no alcanzó a decodificar) | 0 | 0 | 0 |
+Peor caso de todas las partidas con el bot perfecto, el que no toca y el que machaca (`resultado.txt` de cada caso):
 
-El máximo del cuadro de CPU (3192 M de 17556) deja ≥ 80 % de holgura. **Lo que sí está cerca del límite es la ISR** en los
-cuadros donde suenan los cuatro canales a la vez (hasta 18 escrituras de registro) y hay que copiar la fila: la cola
-de VRAM termina en la línea 7 de las 10 del VBlank. Para no crecer más allá:
+| Concepto | Objetivo | Peor caso medido |
+|---|---|---|
+| Bytes copiados a VRAM por cuadro | ≤ 96 | **59** |
+| La cola de VRAM termina dentro del VBlank | línea 10 de las 10 | **línea 6** (sin un solo desborde) |
+| ISR completa, con el audio (resolución 64 M) | ≤ 1140 antes del audio | 1344 M (el audio va al final: no importa si pasa del VBlank) |
+| Bucle principal (resolución 114 M) | ≤ 7000 (gameplay 5000 + filas y HUD 2000) | **4902** de 17556 |
+| Cuadros atrasados | ≤ 2 | **0** |
+| Sprites por línea / totales | ≤ 8 / ≤ 20 | 5 / 5 |
+| Subdesbordes del audio | 0 | **0** |
 
-- el HUD manda un grupo de dígitos por cuadro, no todos a la vez (con todos juntos la ISR pasaba de 1280 M);
-- la sombra de registros del APU y los contadores de altas de nota se direccionan con un solo `ld e, c`;
-- `wOverrun` cuenta cualquier ISR cuya cola termine fuera del VBlank y las pruebas exigen 0.
-
+Lo que costó llegar ahí (fase 3, con canciones de 5 canales y acordes):
+- El audio con los cuatro canales a la vez (18 escrituras) tardaba hasta ~400 M y empujaba la cola de VRAM fuera del VBlank en
+  *Cumbia del Cartucho* (CGB): **el audio pasó al final de la ISR** (decisiones.md, fase 3, punto 8).
+- Ya no se copia todo el OAM por DMA cuando cambia un aro: se copian los 5 tiles (55 M contra 160 M).
+- Una fila vacía del fondo no se escribe si no tenía gemas (en CGB ahorra 20 de los ~26 bytes de la mayoría de las filas).
+- El HUD manda un grupo de dígitos por cuadro.
 ## Cómo se mide
 
 - **Error visual:** `playtest.visual_errors` lee el mapa `$9800` y el `SCY` del hardware en el hook de fin de ISR.

@@ -77,6 +77,19 @@ def cmd_reimport(args: argparse.Namespace) -> None:
     songs.list_songs()
 
 
+def cmd_edit_chart(args: argparse.Namespace) -> None:
+    from . import editor
+
+    if args.html:
+        if not args.name:
+            raise SystemExit("--html necesita el nombre de la canción")
+        page = editor.render_page(editor.build_payload(editor.load_song_source(args.name)))
+        args.html.write_text(page, encoding="utf-8", newline="\n")
+        print(f"Página de solo lectura: {args.html}")
+    else:
+        editor.serve(args.name, args.port, not args.no_open)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="gbband", description="Herramientas de PC de GBBand")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -101,6 +114,12 @@ def main() -> None:
     p = sub.add_parser("reimport", help="vuelve a importar canciones con sus opciones originales")
     p.add_argument("names", nargs="*")
     p.set_defaults(func=cmd_reimport)
+    p = sub.add_parser("edit-chart", help="abre el editor visual de charts (página local en el navegador)")
+    p.add_argument("name", nargs="?", help="canción de src/songs/ (sin ella, el editor abre en blanco y eliges desde su menú Archivo)")
+    p.add_argument("--port", type=int, default=8765, help="puerto local (0 = cualquiera libre)")
+    p.add_argument("--no-open", action="store_true", help="no abrir el navegador")
+    p.add_argument("--html", type=Path, help="en vez de servir, escribe una página HTML de solo lectura en esta ruta")
+    p.set_defaults(func=cmd_edit_chart)
     sub.add_parser("build-gems", help="regenera src/chr/gems.tiles (gemas con sus variantes)").set_defaults(func=cmd_build_gems)
     sub.add_parser("measure-placement", help="mide las colocaciones A y B con los charts de NESBand").set_defaults(func=cmd_measure)
     smoke = sub.add_parser("smoke", help="corre un ROM en DMG y CGB y toma capturas")

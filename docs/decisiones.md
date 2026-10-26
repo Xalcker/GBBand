@@ -64,3 +64,43 @@ Decisiones menores que tomé yo, con su motivo. Las de gran tamaño se proponen 
     dígitos por cuadro. La fase 4 los moverá a la pantalla de resultados.
 12. **Pendiente de la fase 2 que no se hizo:** pausa y "después de pausar" de la prueba de sincronía (llegan con la pausa
     de la fase 4); bots "humano" (90 % / 45 %), opciones (espejo, velocidad, práctica) y charts de los otros instrumentos.
+
+## Fase 3
+
+1. **El NSF se importa sin FamiStudio** (la spec decía "vía FamiStudio, como NESBand"). El NSF se ejecuta en un 6502 propio
+   (`cpu6502.py`, solo opcodes oficiales) y se registra el APU (`nsf.py`); las notas de los charts se derivan del estado por
+   cuadro. Motivos: sin .NET ni descargas, funciona igual en Windows y macOS, y se prueba con NSF sintéticos escritos a mano
+   (los reales tienen copyright). **No se probó con ningún NSF comercial real**: el 6502 y el APU están probados contra
+   programas pequeños y contra el hardware documentado, nada más. Un NSF con el tempo mal estimado se corrige con `--beat-frames`.
+   La importación de un proyecto de FamiStudio con envolventes de tono, arpegio o vibrato las ignora y lo avisa en el log.
+2. **La fuente de las canciones originales es el proyecto de texto de FamiStudio** (`audio/*.txt`, que generan `audio/*.py`
+   con `compose.py`, copiados de NESBand) y se lee con `famitext.py`.
+3. **Batería.** Los charts y el sonido salen de la misma asignación de papeles (`drums.json`, la de NESBand para las
+   originales; para una canción nueva, la sugerida automáticamente). El sonido de cada golpe es un parche del canal de
+   ruido (CH4) por papel: bombo (cae de tono en 4 cuadros), tarola, hi-hat cerrado y abierto, platillo y 3 toms. Dos golpes en
+   el mismo cuadro: se queda el de más prioridad (bombo > tarola > platillo > tom > hi-hat) y se avisa. **Los timbres de
+   la batería, los volúmenes y la ganancia de cada canal están elegidos a ojo y se calibran de oído.** No existe DPCM: los
+   samples se sustituyen por esos parches.
+4. **El audio se parte en tramos solo si hace falta.** Un pulso nunca cambia de volumen sin reiniciarse: cada nota se ajusta a
+   volumen constante, envolvente por hardware (caída monótona) o dos tramos con un reinicio. Las diez originales dan un error
+   medio de 0.07 a 0.94 pasos de volumen (máximo 2.6 en *Salto Mortal*); el log dice cuántas notas pasan de 1.5 pasos.
+5. **Ficha de la canción.** Título de 20 caracteres, juego de 16 (la spec decía 16 para ambos: "Marcha del Cartucho" y "Noche sin
+   Estrellas" miden 19) y el cuadro del primer tiempo para el escenario de la fase 4 (`src/song_format.inc`).
+6. **Lead-in de 180 cuadros** (más que la anticipación de fácil, 156): la primera nota ya está cayendo cuando empieza el audio.
+7. **Lista de canciones.** `build/list.asm` (en `build/`, no en git) se regenera en cada compilación: alfabético, el lugar de
+   cada canción es su slot y su banco es 16 + 3 x slot. `-Release` incluye solo las canciones versionadas en git; `-Solo` filtra.
+8. **ISR reordenada (sale de lo que dice la spec):** OAM, cola de VRAM, scroll y LCDC, y **después** el audio (la spec pedía
+   el audio primero, "para que su jitter sea constante"). Motivo, medido: con los cuatro canales sonando a la vez el audio tarda
+   hasta ~400 M y empujaba la cola de VRAM fuera del VBlank en las canciones más cargadas (`wOverrun`), cosa que en una DMG real
+   pierde escrituras. El audio no tiene fecha límite y su corrimiento (unas decenas de microsegundos) es inaudible.
+9. **Menos trabajo en la ISR.** El OAM DMA completo (160 M) solo se hace al armar la pantalla; después solo se copian los 5
+   tiles de los aros. Una fila vacía del fondo no se escribe si la vuelta anterior no dejó gemas en esa fila (`wRowFlags`).
+10. **Las colas ($40 y $80) y las frases estelares ($20) ya vienen en los charts**, pero la ROM todavía las ignora (una cola es
+    una nota normal y el fin de cola se salta): se dibujan y se juegan en la fase 4. `enforce_lane_gap` mira solo las gemas;
+    habrá que reimportar cuando las colas ocupen tiles.
+11. **Pruebas.** `GBBAND_COMPLETA=1` corre las diez canciones (243 pruebas, unos 140 s); sin ella, tres (unas 90). El bot de
+    cada caso elige canción, instrumento y dificultad con el menú, como un jugador, y comprueba el título mostrado.
+12. **El editor** reutiliza la página de NESBand: sus canales siguen siendo Square 1/2, Triángulo, Ruido y DPCM (la IR), pero
+    "Escuchar" toca el stream de la ROM (4 canales; Ruido y DPCM comparten el CH4). `Exportar a la ROM` reimporta la canción.
+13. **Pendiente de la fase 3:** `preview` (WAV de cada pista de un NSF sin .m3u: de momento se importa con `--song N` y se
+    escucha en el editor), importador GBS/VGM (fase 5), keyframes y práctica (fase 4), y la prueba de sincronía después de pausar.

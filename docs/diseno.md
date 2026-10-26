@@ -80,9 +80,36 @@ rutina de OAM DMA. El mapa exacto está en `src/wram.asm`.
 - **Puntaje.** 50 x multiplicador por nota (x1 con 0-9 de combo, x2 con 10-19, x3 con 20-29, x4 desde 30).
 - **Audio.** Stream FRS en 2 bancos; el bucle principal decodifica a un ring de 16 cuadros en WRAM y la ISR solo lee de ahí.
 
+## Pipeline de canciones (fase 3)
+
+```
+fuente                          IR (ir.py)                       salidas (src/songs/<nombre>/)
+proyecto de FamiStudio (.txt) --> famitext.py -+
+                                               +--> SongIR --+--> chart.py + drums.py + chartedit.py --> chart_<instr>_<dif>.bin
+NSF --> cpu6502.py + nsf.py (APU) -------------+             +--> gbaudio.py --> audio_gb.py --> stream_b/c.bin + keyframes.bin
+```
+
+- **IR.** `SongIR` = las notas de los 5 canales (para los charts, con la misma forma que en NESBand) y, por cuadro y por
+  canal tonal, frecuencia en Hz, volumen 0-15, duty y si arrancó una nota (para el audio). No sabe nada de la Game Boy.
+- **Fuentes.** Un proyecto de texto de FamiStudio trae las notas exactas; se lee sin FamiStudio (envolventes de volumen
+  y duty). Un NSF se ejecuta en un 6502 (`cpu6502.py`), se emula el APU (envolventes, longitudes, contador lineal, barrido) y
+  se registra el estado de cada cuadro; las notas se derivan de él.
+- **Charts.** El generador de NESBand (contorno, tiempos fuertes, acordes, colas, frases estelares, batería por papeles),
+  más `enforce_lane_gap`: dos gemas del mismo carril necesitan 24 / 20 / 16 / 12 cuadros (fácil a experto) para no compartir
+  tiles (ver vram.md). Un chart son pares de 2 bytes (cuadros desde la entrada anterior, carriles y marcas).
+- **Audio.** `gbaudio.py`: Pulso 1/2 -> CH1/CH2, Triángulo -> CH3 con el triángulo de 32 pasos en la wave RAM, Ruido y DPCM
+  -> CH4 con parches por papel (bombo, tarola, hi-hat, platillo, toms). Volumen: constante, envolvente por hardware o dos
+  tramos con un reinicio de la nota; el error medio y máximo se reporta. Las notas fuera de rango suben de octava (se avisa).
+  Tempo: 1 cuadro NES = 1 cuadro GB (0.6 % más lento).
+- **Slot de canción.** 3 bancos: A = ficha (112 bytes) + 16 charts + 4 keyframes; B y C = stream FRS (hasta 32 KB). Las diez
+  canciones originales usan de 6 a 13 KB de stream y de 6 a 11 KB en el banco A.
+- **ROM.** `gbband list-songs` escribe `build/list.asm` (banco de cada canción y la tabla `SongTable`); el menú lee de la ficha
+  el título, el juego y los instrumentos disponibles. El instrumento elegido decide qué chart se juega y qué canal del APU se
+  calla al fallar (CH1 guitarra, CH2 teclado, CH3 bajo, CH4 batería).
+
 ## Estado actual
 
 - **Fase 1** (esqueleto): ROM "hola mundo", herramientas y pruebas. Hecha.
-- **Fase 2** (rebanada vertical): menú de dificultad, una canción original de ~32 s (`audio/demo.py`), autopista con scroll,
-  Window de HUD, 5 carriles, ventana de acierto en cuadros, puntaje, combo, silencio al fallar, ISR con ring de audio y
-  cola de VRAM. Medida la colocación A contra B (ver [vram.md](vram.md)). Hecha; ver [decisiones.md](decisiones.md) para lo que queda pendiente.
+- **Fase 2** (rebanada vertical): autopista, juez, puntaje y combo, stream FRS, ISR con ring de audio. Hecha.
+- **Fase 3** (pipeline de canciones): IR, importador (FamiStudio y NSF), conversor al stream FRS, charts de 4 instrumentos, las
+  diez canciones originales, editor de charts con "Escuchar". Hecha; ver [decisiones.md](decisiones.md) para lo que queda pendiente.

@@ -51,6 +51,15 @@ def gb_text(text: str, limit: int) -> str:
     return " ".join(plain.split())[:limit]
 
 
+def cache_ir(root: Path, name: str, song: ir.SongIR) -> None:
+    """La IR queda en build/songs/<nombre>/ir.pkl para el editor de charts (importar un NSF tarda unos segundos)."""
+    import pickle
+
+    folder = root / "build" / "songs" / name
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "ir.pkl").write_bytes(pickle.dumps(song))
+
+
 def write_lf(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8", newline="\n")
 
@@ -94,6 +103,33 @@ def truncated(song: ir.SongIR, frames: int) -> ir.SongIR:
     return cut
 
 
+def auto_charts(song: ir.SongIR, grid: charts.BeatGrid, assignment: dict | None, lead_in: int = LEAD_IN,
+                stats: dict | None = None) -> dict[str, list[charts.ChartNote]]:
+    """Los charts que genera el importador (sin las ediciones a mano), por clave "instrumento/dificultad". La batería sale
+    de la asignación de papeles (drums.json) y solo existe si algún golpe tiene papel."""
+    result: dict[str, list[charts.ChartNote]] = {}
+    hits = drums_mod.drum_hits(song, assignment) if assignment else []
+    for instrument, channel in INSTRUMENTS:
+        notes = song.notes.get(channel, []) if channel else []
+        if not notes and not (instrument == "bateria" and hits):
+            continue
+        for difficulty in charts.DIFFICULTIES:
+            if instrument == "bateria":
+                chart = drums_mod.build_drum_chart(hits, difficulty.name, grid, lead_in, stats)
+            else:
+                role, partner = ROLE_OF[instrument]
+                chart = charts.build_chart(notes, difficulty, grid, lead_in, role, song.notes.get(partner, []), stats)
+            result[f"{instrument}/{difficulty.name}"] = chart
+    return result
+
+
+def beat_grid(song: ir.SongIR, beat_frames: int | None) -> charts.BeatGrid:
+    """La rejilla de tiempos: la del proyecto de FamiStudio es confiable; la de un NSF se estima de los ataques."""
+    if song.frames_per_beat and not beat_frames:
+        return charts.estimate_beat([0], song.frames_per_beat)
+    return charts.estimate_beat([n.frame for ch in song.notes.values() for n in charts.merge_attacks(ch)], beat_frames)
+
+
 def import_song(options: Options, root: Path = ROOT) -> list[str]:
     name = options.name
     if not re.fullmatch(r"[a-z][a-z0-9_]*", name):
@@ -104,8 +140,7 @@ def import_song(options: Options, root: Path = ROOT) -> list[str]:
     title = gb_text(options.title or default_title or name, TITLE_LEN)
     game = gb_text(options.game or default_game, GAME_LEN)
     summary: list[str] = []
-    grid = (charts.estimate_beat([0], song.frames_per_beat) if song.frames_per_beat and not options.beat_frames
-            else charts.estimate_beat([n.frame for ch in song.notes.values() for n in charts.merge_attacks(ch)], options.beat_frames))
+    grid = beat_grid(song, options.beat_frames)
 
     # El trabajo manual sobrevive: asignación de la batería y ediciones de los charts
     kept = {n: (out_dir / n).read_text(encoding="utf-8") for n in (EDITS_FILE, drums_mod.DRUMS_FILE) if (out_dir / n).exists()}
@@ -133,39 +168,36 @@ def import_song(options: Options, root: Path = ROOT) -> list[str]:
     else:
         raise SystemExit("No logré que el audio de la canción cupiera en 2 bancos")
     song = truncated(song, n) if max_frames else song
+    cache_ir(root, name, song)
 
     # Charts
     lead_in = LEAD_IN
     chart_files: dict[str, bytes] = {}
     instrument_mask = 0
     stats: dict = {}
-    drum_hits = drums_mod.drum_hits(song, assignment) if assignment else []
+    automatic = auto_charts(song, grid, assignment, lead_in, stats)
     for index, (instrument, channel) in enumerate(INSTRUMENTS):
-        notes = song.notes.get(channel, []) if channel else []
-        if not notes and not (instrument == "bateria" and drum_hits):
-            summary.append(f"  {instrument:9} -")
-            continue
-        instrument_mask |= 1 << index
         counts = []
         for difficulty in charts.DIFFICULTIES:
-            if instrument == "bateria":
-                chart = drums_mod.build_drum_chart(drum_hits, difficulty.name, grid, lead_in, stats)
-            else:
-                role, partner_channel = ROLE_OF[instrument]
-                chart = charts.build_chart(notes, difficulty, grid, lead_in, role, song.notes.get(partner_channel, []), stats)
             key = f"{instrument}/{difficulty.name}"
+            if key not in automatic:
+                continue
+            chart = automatic[key]
             if edits.get(key):
                 chart = apply_edits(chart, edits[key], warn=lambda text, key=key: summary.append(f"  AVISO edits.json ({key}): {text}"))
             validate_chart(key, chart)
             chart_files[f"chart_{instrument}_{difficulty.name}.bin"] = charts.chart_bytes(chart)
             counts.append(f"{difficulty.name} {len(chart)}")
-        summary.append(f"  {instrument:9} ({channel or 'ruido y DPCM'}): " + ", ".join(counts))
+        if counts:
+            instrument_mask |= 1 << index
+            summary.append(f"  {instrument:9} ({channel or 'ruido y DPCM'}): " + ", ".join(counts))
+        else:
+            summary.append(f"  {instrument:9} -")
     if not instrument_mask:
         raise SystemExit("La canción no tiene notas en ningún canal")
     if stats.get("moved") or stats.get("dropped"):
         summary.append(f"  separación de gemas del mismo carril: {stats.get('moved', 0)} notas pasaron a otro carril, "
                        f"{stats.get('dropped', 0)} se quitaron (de ~{sum(len(c) for c in chart_files.values()) // 2} entradas)")
-
     # Keyframes y tamaño del banco A
     records = [gbaudio.keyframe_record(result, song, at) for at in keyframe_at]
     key_bytes = b"".join(records)
