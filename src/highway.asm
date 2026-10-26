@@ -21,6 +21,7 @@ DEF HIT_Y EQU 120               ; la línea de golpe: fila de tiles 15, justo ar
 ; Debe coincidir con layout.speed_8_8 (lo comprueba una prueba de pytest).
 SpeedTable:
     dw 198, 234, 303, 396
+StepsPer4: db 4, 3, 2, 5        ; pasos de la canción cada 4 cuadros reales, de 100%, 75%, 50% y 125%
 
 GemBase:    db TILE_GEM, TILE_GEM + GEM_STRIDE, TILE_GEM + 2 * GEM_STRIDE, TILE_GEM + 3 * GEM_STRIDE, TILE_GEM + 4 * GEM_STRIDE
 GemTopIdx:  db 0, 2, 6, 10       ; tile de arriba izquierda de la variante 0, 2, 4, 6 px
@@ -36,7 +37,14 @@ ENDC
 ; ---- Inicio -------------------------------------------------------------------------------
 ; Con el LCD apagado y el banco de la canción activo.
 HighwayInit:
+    ld a, [wOptFall]        ; CAIDA DE NOTAS: 0 = la de la dificultad elegida; 1 a 4 = la de facil a experto
+    and a
+    jr z, .auto
+    dec a
+    jr .haveIdx
+.auto:
     ld a, [wDifficulty]
+.haveIdx:
     add a
     ld e, a
     ld d, 0
@@ -44,9 +52,33 @@ HighwayInit:
     add hl, de
     ld a, [hl+]
     ld [wSpeed], a
+    ld e, a
     ld a, [hl]
     ld [wSpeed + 1], a
+    ld d, a
+    ; avance del scroll por cuadro real (8.16) = velocidad * pasos por cuadro: 4/4, 3/4, 2/4 o 5/4 de la velocidad
+    ld a, [wSpeedMode]
+    ld c, a
+    ld b, 0
+    ld hl, StepsPer4
+    add hl, bc
+    ld b, [hl]
+    call MulDelta           ; HL = velocidad * pasos (8.8, 4 veces el avance)
+    ld a, l
+    and 3
+    rrca
+    rrca
+    ld [wStepSpd], a        ; (velocidad * pasos) * 64 = 8.16
+    srl h
+    rr l
+    srl h
+    rr l
+    ld a, l
+    ld [wStepSpd + 1], a
+    ld a, h
+    ld [wStepSpd + 2], a
     xor a
+    ld [wScrollF], a
     ld [wScroll], a
     ld [wScroll + 1], a
     ldh [hScy], a
@@ -103,9 +135,13 @@ HighwayInit:
 ; ---- Cada cuadro ----------------------------------------------------------------------------
 ; Avanza el scroll al cuadro siguiente (el que mostrará la próxima ISR) y arma una fila si cruzó un múltiplo de 8 px.
 HighwayStep:
-    ld hl, wSpeed
-    ld a, [wScroll]
+    ld hl, wStepSpd
+    ld a, [wScrollF]
     sub [hl]
+    ld [wScrollF], a
+    inc hl
+    ld a, [wScroll]
+    sbc [hl]
     ld [wScroll], a
     inc hl
     ld a, [wScroll + 1]
@@ -144,6 +180,7 @@ FetchNote:
     jp z, .end
     ld c, a                 ; C = el byte del chart: carriles ($1F), cola ($40) y fin de cola ($80)
     and $1F
+    call MirrorLanes
     ld [wNMask], a
     xor a
     bit 7, c

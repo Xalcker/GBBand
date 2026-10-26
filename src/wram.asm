@@ -107,7 +107,8 @@ wNr51Out::      ds 1
 
 ; --- autopista ---
 wSpeed::        ds 2     ; px por cuadro, punto fijo 8.8
-wScroll::       ds 2     ; posición del scroll, 8.8 (SCY = byte alto)
+wScrollF::      ds 1     ; byte bajo del scroll (va justo antes de wScroll)
+wScroll::       ds 2     ; posición del scroll, 8.8 (SCY = byte alto; los 8 bits de abajo van en wScrollF)
 wBuildQ::       ds 2     ; fila (con signo) que se arma ahora
 wBCur::         ds 2     ; cursor del chart del armador de filas
 wBFs::          ds 3     ; cuadro de la siguiente nota por la velocidad, 24 bits 8.8
@@ -166,8 +167,24 @@ wHudDirty::     ds 1
 wQSrc::         ds 2
 wQDigit::       ds 1
 
+; --- opciones (seis valores seguidos: el índice del renglón de la pantalla de opciones indexa wOpt) ---
+wOpt::
+wOptMirror::    ds 1     ; ESPEJO: 0 no, 1 si
+wOptSpeed::     ds 1     ; VELOCIDAD: 0 100%, 1 75%, 2 50%, 3 125%
+wOptFall::      ds 1     ; CAIDA DE NOTAS: 0 auto, 1 a 4 la de facil, medio, dificil, experto
+wOptPractice::  ds 1     ; PRACTICA: 0 no, 1 hasta 1/4, 2 hasta 1/2, 3 hasta 3/4, 4 hasta el final
+wOptStart::     ds 1     ; INICIO DE LA PRACTICA: 0 principio, 1 a 3 un cuarto, la mitad, tres cuartos
+wOptFx::        ds 1     ; EFECTO AL FALLAR: 0 si, 1 solo sonido, 2 no
+wOptRow::       ds 1     ; renglón de la pantalla de opciones
+wMirrorOn::     ds 1     ; espejo activo en esta partida (la batería lo ignora)
+wSpeedMode::    ds 1     ; velocidad de la partida (copia de wOptSpeed)
+wSpeedPhase::   ds 1     ; cuadro dentro del ciclo de 4 de la velocidad
+wStepsNow::     ds 1
+wJT::           ds 2     ; el wT de la última vez que se juzgó
+wTSave::        ds 2
+wStepSpd::      ds 3     ; avance del scroll por cuadro real, 8.16
+
 ; --- efecto al fallar ---
-wOptFx::        ds 1     ; opción EFECTO AL FALLAR: 0 si, 1 solo sonido, 2 no
 wFxCool::       ds 1     ; cuadros hasta poder repetir el efecto
 wShake::        ds 1     ; cuadros que le quedan al temblor y al tinte rojo
 wSfxLast::      ds 1     ; el último efecto de sonido (para no repetirlo)

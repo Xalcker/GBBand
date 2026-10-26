@@ -16,6 +16,7 @@ DEF STATE_PLAY    EQU 2
 DEF STATE_PAUSE   EQU 3
 DEF STATE_RESULTS  EQU 4
 DEF STATE_INITIALS EQU 5
+DEF STATE_OPTIONS EQU 6
 
 ; --- Vida (cada acierto suma 1; perder una nota resta 2, o 1 en fácil; un golpe al aire resta 1) -------------
 DEF LIFE_MAX   EQU 40

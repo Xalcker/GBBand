@@ -10,7 +10,7 @@ TxtInstr:    db " INSTRUMENTO", 0
 TxtDiff:     db " DIFICULTAD", 0
 TxtFail:     db " FALLO", 0
 TxtPress:    db "PRESIONA START", 0
-TxtBack:     db "B: VOLVER", 0
+TxtBack:     db "B:VOLVER  SELECT:OPC", 0
 TxtSubtitle: db "RITMO PARA GAME BOY", 0
 TxtNoRel:    db "PROYECTO DE AFICIONADOS", 0
 TxtNoRel2:    db "SIN RELACION CON NINTENDO", 0
@@ -140,7 +140,7 @@ EnterMenu:
     ld de, _SCRN0 + 32 * MENU_ROW_FAIL + 1
     ld hl, TxtFail
     call PrintStr
-    ld de, _SCRN0 + 32 * 16 + 1
+    ld de, _SCRN0 + 32 * 16 + 0
     ld hl, TxtBack
     call PrintStr
     ld de, _SCRN0 + 32 * 17 + 3
@@ -309,6 +309,8 @@ MenuFrame:
     jp nz, StartSong
     bit PADB_B, b
     jp nz, EnterTitle
+    bit PADB_SELECT, b
+    jp nz, EnterOptions
     bit PADB_DOWN, b
     jr z, .notDown
     ld a, [wMenuRow]
@@ -430,6 +432,7 @@ StartSong:
     ld [wEndFrame + 1], a
 
     call FxClear
+    call ApplyOptions
     call HighwayInit
     call GameplayInit
     call OamInit
@@ -449,6 +452,81 @@ StartSong:
     ld [wState], a
     ret
 
+; Copia las opciones a lo que usa la partida y decide si cuentan para los récords (el efecto al fallar no cambia el juego)
+ApplyOptions:
+    ld a, [wOptSpeed]
+    ld [wSpeedMode], a
+    xor a
+    ld [wSpeedPhase], a
+    ld [wJT], a
+    ld [wJT + 1], a
+    ld a, [wInstrument]     ; la batería ignora el espejo
+    cp 3
+    ld a, 0
+    jr z, .mirrorSet
+    ld a, [wOptMirror]
+.mirrorSet:
+    ld [wMirrorOn], a
+    ld a, [wMirrorOn]
+    ld hl, wOptSpeed
+    or [hl]
+    inc hl
+    or [hl]                 ; caída
+    inc hl
+    or [hl]                 ; práctica
+    ld [wOptionsUsed], a
+    ret
+
+; Juzga los pasos de la canción que pasaron desde el cuadro anterior: ninguno (75% y 50%), uno, o dos (125%).
+; Con dos, el primero se juzga con wT - 1 (los botones nuevos los lee el primero).
+JudgeSteps:
+    ld hl, wT
+    ld a, [wJT]
+    ld e, a
+    ld a, [hl+]
+    sub e
+    ld c, a                 ; C = pasos nuevos (los cuadros atrasados también cuentan)
+    ld a, [wJT + 1]
+    ld d, a
+    ld a, [hl]
+    sbc d
+    ret nz                  ; (no debería pasar: más de 255 pasos)
+    ld a, c
+    and a
+    ret z
+    ld hl, wT
+    ld a, [hl+]
+    ld [wJT], a
+    ld a, [hl]
+    ld [wJT + 1], a
+    ld a, c
+    dec a
+    jp z, JudgeFrame
+    ld b, a                 ; B = pasos anteriores que se juzgan primero
+.back:
+    push bc
+    ld hl, wT               ; wT temporalmente baja para juzgar el paso anterior
+    ld a, b
+    ld c, a
+    ld a, [hl]
+    ld [wTSave], a
+    sub c
+    ld [hl+], a
+    ld a, [hl]
+    ld [wTSave + 1], a
+    sbc 0
+    ld [hl], a
+    call JudgeFrame
+    ld hl, wT
+    ld a, [wTSave]
+    ld [hl+], a
+    ld a, [wTSave + 1]
+    ld [hl], a
+    pop bc
+    dec b
+    jr nz, .back
+    jp JudgeFrame
+
 ; Un cuadro de juego (después de cada VBlank). Orden: juzgar, avanzar la autopista, HUD, aros, silencio,
 ; y al final rellenar el audio (que cambia de banco: nada de lo anterior puede ir después).
 PlayFrame:
@@ -466,7 +544,7 @@ PlayFrame:
     ldh [hPassLY], a
     ld a, [wSongBank]
     call SwitchBank
-    call JudgeFrame
+    call JudgeSteps
     call HighwayStep
     call HudUpdate
     call UpdateOam

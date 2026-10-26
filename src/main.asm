@@ -156,7 +156,7 @@ MainLoop:
 
 ; Un manejador por estado, en el orden de STATE_...
 StateTable:
-    dw TitleFrame, MenuFrame, PlayFrame, PauseFrame, ResultsFrame, InitialsFrame
+    dw TitleFrame, MenuFrame, PlayFrame, PauseFrame, ResultsFrame, InitialsFrame, OptionsFrame
 
 ; ---- Utilidades --------------------------------------------------------------
 
@@ -210,6 +210,7 @@ INCLUDE "gameplay.asm"
 INCLUDE "hud.asm"
 INCLUDE "scene.asm"
 INCLUDE "game.asm"
+INCLUDE "options.asm"
 INCLUDE "results.asm"
 INCLUDE "records.asm"
 

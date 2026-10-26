@@ -11,6 +11,30 @@ SECTION "Gameplay", ROM0
 
 LaneBit: db %00001, %00010, %00100, %01000, %10000
 
+; Con ESPEJO el chart se traduce al leerlo: verde <-> naranja y rojo <-> azul (el amarillo se queda). La batería lo ignora.
+MirrorTab:
+FOR i, 32
+    db ((i & 1) << 4) | ((i & 2) << 2) | (i & 4) | ((i & 8) >> 2) | ((i & 16) >> 4)
+ENDR
+
+; A = carriles del chart -> A = carriles en pantalla. Conserva todo lo demás.
+MirrorLanes:
+    push hl
+    push de
+    ld e, a
+    ld a, [wMirrorOn]
+    and a
+    ld a, e
+    jr z, .done
+    ld d, 0
+    ld hl, MirrorTab
+    add hl, de
+    ld a, [hl]
+.done:
+    pop de
+    pop hl
+    ret
+
 GameplayInit:
     xor a
     ld [wJFrame], a
@@ -95,12 +119,14 @@ JudgeFeed:
     ld d, a
     ld a, c
     and $1F
+    call MirrorLanes
     call SetTailEnd
     jp .loop
 .lanesEntry:
     ld a, c
     and $1F
     jp z, .loop             ; entrada de relleno
+    call MirrorLanes
     ld b, a                 ; B = carriles
     xor a
     bit 5, c                ; nota de una frase estelar

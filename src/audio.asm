@@ -246,6 +246,55 @@ AudioTick:
     call AudioTickStream
     jp SfxTick
 
+; Pasos de la canción de este cuadro real (0, 1 o 2 según la velocidad): por cada uno corre el audio y avanza wT.
+; A 100% siempre es uno. Los ciclos de 4 cuadros: 75% = 1,1,1,0; 50% = 1,0,1,0; 125% = 2,1,1,1.
+SpeedPattern:
+    db 1, 1, 1, 1
+    db 1, 1, 1, 0
+    db 1, 0, 1, 0
+    db 2, 1, 1, 1
+
+AudioSteps:
+    ld a, [wPlaying]
+    and a
+    ret z
+    ld a, [wSpeedMode]
+    and a
+    ld a, 1
+    jr z, .go
+    ld a, [wSpeedPhase]
+    ld b, a
+    inc a
+    ld [wSpeedPhase], a
+    ld a, b
+    and 3
+    ld b, a
+    ld a, [wSpeedMode]
+    add a
+    add a
+    add b
+    ld e, a
+    ld d, 0
+    ld hl, SpeedPattern
+    add hl, de
+    ld a, [hl]
+    and a
+    ret z
+.go:
+    ld [wStepsNow], a
+.step:
+    call AudioTick
+    ld hl, wT
+    inc [hl]
+    jr nz, .noCarry
+    inc hl
+    inc [hl]
+.noCarry:
+    ld hl, wStepsNow
+    dec [hl]
+    jr nz, .step
+    ret
+
 AudioTickStream:
     ld a, [wNr51Out]
     ldh [rNR51], a

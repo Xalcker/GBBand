@@ -262,7 +262,7 @@ def test_efecto_al_fallar(rom_b, mode):
     runs = {}
     for opt in (0, 1, 2):
         runs[opt] = playtest.run_case(rom_b, mode, song, "teclado", "experto", "sin-tocar",
-                                      out_dir(song, f"fx{opt}", "teclado", "experto", mode), no_fail=True, fx_opt=opt)
+                                      out_dir(song, f"fx{opt}", "teclado", "experto", mode), no_fail=True, options={"fx": opt})
     full, sound, off = (runs[i].values for i in (0, 1, 2))
     assert full["sfx_starts"] >= 5 and len(full["sfx_ids"]) == 3
     times = full["sfx_times"]
@@ -273,3 +273,46 @@ def test_efecto_al_fallar(rom_b, mode):
     assert full["score"] == sound["score"] == off["score"] and full["misses"] == off["misses"]
     for r in runs.values():
         common_checks(r)
+
+
+@pytest.mark.parametrize("mode", MODES)
+@pytest.mark.parametrize("instrument", ["guitarra", "bateria"])
+def test_espejo(rom_b, mode, instrument):
+    """ESPEJO traduce el chart al leerlo (el bot sigue los carriles mirrados y lo acierta todo); no cambia el puntaje.
+    Con una opción distinta de la normal no hay récord."""
+    song = QUICK_SONGS[0]
+    base = playtest.run_case(rom_b, mode, song, instrument, "experto", "perfecto", out_dir(song, "esp0", instrument, "experto", mode))
+    mir = playtest.run_case(rom_b, mode, song, instrument, "experto", "perfecto", out_dir(song, "esp1", instrument, "experto", mode),
+                            options={"mirror": 1}, visual=True)
+    assert mir.values["score"] == base.values["score"] == playtest.expected_score(mir.total_notes)
+    assert mir.values["pct"] == 100 and mir.values["misses"] == 0 and mir.values["air"] == 0
+    assert mir.values["new_record"] == (1 if instrument == "bateria" else 0)  # la batería ignora el espejo: sí es récord
+    common_checks(mir)
+
+
+@pytest.mark.parametrize("mode", MODES)
+@pytest.mark.parametrize("speed", [1, 2, 3], ids=["75", "50", "125"])
+def test_velocidad(rom_b, mode, speed):
+    """A 75%, 50% y 125% la canción avanza 3, 2 o 5 pasos cada 4 cuadros reales, el sonido sigue el reloj de la canción
+    y el bot lo acierta todo; no hay récord."""
+    song = QUICK_SONGS[0]
+    r = playtest.run_case(rom_b, mode, song, "guitarra", "experto", "perfecto", out_dir(song, f"vel{speed}", "guitarra", "experto", mode),
+                          options={"speed": speed}, visual=True)
+    ratio = (4 / 3, 2, 0.8)[speed - 1]
+    info = playtest.load_song(song).info
+    assert abs(r.frames - info["end_frame"] * ratio) < 120, (r.frames, info["end_frame"] * ratio)
+    assert r.values["score"] == playtest.expected_score(r.total_notes) and r.values["pct"] == 100
+    assert r.values["new_record"] == 0
+    common_checks(r)
+
+
+@pytest.mark.parametrize("mode", MODES)
+@pytest.mark.parametrize("fall,difficulty", [(1, "experto"), (4, "facil"), (2, "dificil")])
+def test_caida(rom_b, mode, fall, difficulty):
+    """CAIDA DE NOTAS cambia la velocidad del scroll sin tocar el chart: las gemas siguen cayendo sobre la línea de golpe."""
+    song = QUICK_SONGS[0]
+    r = playtest.run_case(rom_b, mode, song, "guitarra", difficulty, "perfecto", out_dir(song, f"caida{fall}", "guitarra", difficulty, mode),
+                          options={"fall": fall}, visual=True)
+    assert r.values["score"] == playtest.expected_score(r.total_notes) and r.values["pct"] == 100
+    assert r.values["new_record"] == 0
+    common_checks(r)

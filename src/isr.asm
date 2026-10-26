@@ -61,9 +61,7 @@ VBlankISR:
     ; 4. audio. Va DESPUÉS de lo que escribe en VRAM/OAM: eso tiene que caber en el VBlank y el audio no (en los
     ;    cuadros donde entran los cuatro canales a la vez tarda hasta ~400 M). La música se atrasa unas decenas
     ;    de microsegundos según el tamaño de la cola, imperceptible.
-    ld a, [wPlaying]
-    and a
-    call nz, AudioTick
+    call AudioSteps
     jr .common
 .late:
     ; main_loop no terminó: no se copia nada a VRAM (podría estar a medias), pero el audio sigue
@@ -72,9 +70,7 @@ VBlankISR:
     jr z, .lateSaturated
     ld [wLate], a
 .lateSaturated:
-    ld a, [wPlaying]
-    and a
-    call nz, AudioTick
+    call AudioSteps
 
 .common:
     ; 5. control, una vez por cuadro (dos lecturas iguales)
@@ -87,15 +83,6 @@ VBlankISR:
     inc hl
     inc [hl]
 .frameDone:
-    ld a, [wPlaying]
-    and a
-    jr z, .noSongFrame
-    ld hl, wT
-    inc [hl]
-    jr nz, .noSongFrame
-    inc hl
-    inc [hl]
-.noSongFrame:
     ld a, 1
     ldh [hVBlank], a
 

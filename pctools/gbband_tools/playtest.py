@@ -116,6 +116,44 @@ def select_in_menu(r: Runner, song: int, instrument: int, difficulty: int, no_fa
         assert value("wNoFail") == 1
     wait()
 
+OPTION_ROWS = {"mirror": 0, "speed": 1, "fall": 2, "practice": 3, "start": 4, "fx": 5}
+
+
+def set_options(r: Runner, options: dict[str, int]) -> None:
+    """Select abre la pantalla de opciones; con ↓ y ←/→ se pone cada valor, y B vuelve al menú (como un jugador)."""
+    def tap(button: str) -> None:
+        r.pb.button_press(button)
+        r.tick(2)
+        r.pb.button_release(button)
+        r.tick(2)
+
+    tap("select")
+    assert r.read("wState")[0] == 6, "Select no abrió las opciones"
+    r.tick(3)
+    row = 0
+    for name, value in sorted(options.items(), key=lambda kv: OPTION_ROWS[kv[0]]):
+        while row < OPTION_ROWS[name]:
+            tap("down")
+            row += 1
+        for _ in range(8):
+            have = r.read("wOpt", 6)[OPTION_ROWS[name]]
+            if have == value:
+                break
+            tap("right" if have < value else "left")
+        assert r.read("wOpt", 6)[OPTION_ROWS[name]] == value, f"no pude poner {name}={value}"
+    r.tick(3)
+    tap("b")
+    assert r.read("wState")[0] == 1, "B no volvió al menú"
+    r.tick(3)
+
+
+def mirror_chart(chart):
+    """El chart como se ve con ESPEJO: verde <-> naranja y rojo <-> azul."""
+    def flip(mask: int) -> int:
+        return sum(1 << (4 - lane) for lane in range(5) if mask >> lane & 1)
+    return [(frame, flip(mask)) for frame, mask in chart]
+
+
 def expected_score(total_notes: int) -> int:
     """Puntaje de acertar `total_notes` notas seguidas: la nota i vale 50 por su multiplicador
     (1 con 0-9 de combo, 2 con 10-19, 3 con 20-29, 4 con 30 o más; el combo ya incluye la nota)."""
@@ -364,15 +402,21 @@ def enter_initials(r: Runner, text: str) -> None:
 def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, bot_name: str, out: Path,
              visual: bool = False, shots: tuple[int, ...] = (40, 400, 1200), seed: int = 1, no_fail: bool = False,
              pause_at: int | None = None, pause_frames: int = 40, ram=None, initials: str | None = None, use_star: bool = False,
-             fx_opt: int | None = None) -> Result:
+             options: dict[str, int] | None = None) -> Result:
     data = load_song(song)
     info = data.info
     chart = data.chart(instrument, difficulty)
     channel = INSTRUMENTS.index(instrument)
     s = layout.speed_8_8(difficulty)
+    options = options or {}
+    mirrored = bool(options.get("mirror")) and instrument != "bateria"
+    tails = data.tails[(instrument, difficulty)]
+    if mirrored:
+        chart = mirror_chart(chart)
+        tails = {(f, 4 - lane): end for (f, lane), end in tails.items()}
     bot = BOTS[bot_name](chart, seed)
     if isinstance(bot, HoldBot):
-        bot.tails = data.tails[(instrument, difficulty)]
+        bot.tails = tails
     result = Result(str(rom.name), mode, difficulty, bot_name, song, instrument,
                     total_notes=sum(len(lanes_of(m)) for _, m in chart))
     lead_in = info["lead_in"]
@@ -385,6 +429,8 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
         r.boot()
         r.tick(5)
         select_in_menu(r, song_names().index(song), channel, layout.DIFFICULTIES.index(difficulty), no_fail)
+        if options:
+            set_options(r, options)
         assert bytes(r.read("wTitleBuf", 20)).decode("ascii").strip() == info["title"], "el menú no muestra el título de la canción"
         r.pb.button_press("start")
         r.tick(2)
@@ -396,11 +442,10 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
         else:
             raise TimeoutError("la partida no empezó")
 
-        if fx_opt is not None:
-            r.pb.memory[r.symbols["wOptFx"]] = fx_opt
+        real_per_step = (1, 4 / 3, 2, 0.8)[options.get("speed", 0)]
         releases: dict[int, int] = {}  # carril -> cuadro en que se suelta
         held: set[int] = set()
-        state = {"prev_on": note_on_counts(r), "timeline": {}, "paused": False, "star_cool": 0, "max_energy": 0, "activations": 0, "was_active": 0,
+        state = {"prev_on": note_on_counts(r), "timeline": {}, "paused": False, "star_cool": 0, "max_energy": 0, "activations": 0, "was_active": 0, "last_t": -1,
                  "sfx_starts": 0, "sfx_prev": 0, "sfx_ids": set(), "max_scx": 0, "shake_frames": 0, "sfx_times": []}
         hframe = lambda: int.from_bytes(r.read("hFrame", 2), "little")
 
@@ -451,11 +496,13 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
                 result.nr51_late = r.read("sh_NR51")[0]
                 result.muted_late = bool(r.read("wMuted")[0])
                 result.max_sprites_line = sprites_per_line(r.read(0xC400, 160))
-            for lane in bot.presses(t):
-                if lane not in held:
-                    r.pb.send_input(PRESS[lane], 1)
-                    held.add(lane)
-                releases[lane] = bot.release_at(t, lane)
+            for tt in range(state["last_t"] + 1, t + 1):    # (a 125% un cuadro real puede traer dos pasos)
+                for lane in bot.presses(tt):
+                    if lane not in held:
+                        r.pb.send_input(PRESS[lane], 1)
+                        held.add(lane)
+                    releases[lane] = bot.release_at(tt, lane)
+            state["last_t"] = max(state["last_t"], t)
             for lane in [l for l, until in releases.items() if t >= until]:
                 r.pb.send_input(RELEASE[lane], 1)
                 held.discard(lane)
@@ -463,7 +510,7 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
 
         r.pb.hook_register(0, r.symbols["IsrEnd"], on_isr_end, None)
         frame_count = 0
-        limit = info["end_frame"] + 300
+        limit = int(info["end_frame"] * real_per_step) + 300
         shots_left = set(shots)
         while r.read("wState")[0] != STATE_END and frame_count < limit:
             r.tick(1)
