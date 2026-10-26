@@ -236,3 +236,19 @@ def test_sostener_las_colas_suma_puntos_que_no_cuentan_para_las_estrellas(rom_b,
     assert extra > 0 and extra % 10 == 0
     assert extra <= 10 * sum((end - frame) // 8 + 1 for (frame, _), end in tails.items())
     assert held.values["pct"] == 100 and held.values["stars"] == 5
+
+@pytest.mark.parametrize("mode", MODES)
+def test_poder_estelar(rom_b, mode):
+    """Las frases estelares completas llenan la barra; con la mitad, Select la activa y el puntaje de lo que sigue vale el doble.
+    Las estrellas no cuentan ese doble (salen del puntaje normal)."""
+    song = QUICK_SONGS[0]
+    base = playtest.run_case(rom_b, mode, song, "guitarra", "experto", "perfecto", out_dir(song, "perfecto-sinestelar", "guitarra", "experto", mode))
+    star = playtest.run_case(rom_b, mode, song, "guitarra", "experto", "perfecto", out_dir(song, "perfecto-estelar", "guitarra", "experto", mode),
+                             use_star=True)
+    expected = playtest.expected_score(star.total_notes)
+    assert base.values["max_energy"] >= 32, "completar frases estelares tiene que llenar la barra"
+    assert base.values["star_activations"] == 0 and base.values["score"] == expected
+    assert star.values["star_activations"] >= 1
+    assert expected < star.values["score"] <= 2 * expected
+    assert star.values["pct"] == 100 and star.values["stars"] == 5
+    common_checks(star)

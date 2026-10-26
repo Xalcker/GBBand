@@ -469,6 +469,7 @@ PlayFrame:
     call HighwayStep
     call HudUpdate
     call UpdateOam
+    call MeterUpdate
     ld a, [wMuted]
     and a
     ld a, $FF

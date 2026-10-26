@@ -135,6 +135,13 @@ wJQMask::       ds 16
 wJQSus::        ds 16    ; la entrada es de notas sostenidas (con cola)
 wTailEnd::      ds 10    ; por carril: cuadro en que termina su cola ($FFFF = todavía no se sabe)
 wHold::         ds 1     ; carriles que se están sosteniendo
+wJQStar::       ds 16    ; la entrada es una nota de frase estelar
+wTmpStar::      ds 1
+wStarEnergy::   ds 1
+wStarActive::   ds 1
+wStarTimer::    ds 1
+wStarRun::      ds 1     ; aciertos de la frase estelar en curso
+wStarFail::     ds 1     ; ya se falló una nota de la frase en curso
 wHoldTick::     ds 5
 wNEnd::         ds 1     ; la entrada que se leyó es un fin de cola
 wNSust::        ds 1     ; la nota que se leyó tiene cola

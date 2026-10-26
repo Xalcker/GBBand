@@ -86,6 +86,9 @@ CgbObjPalettes:
     dw $1842, $098E, $0F7F, $7FFF
     dw $1842, $38C3, $7186, $7FFF
     dw $1842, $04EE, $0A1F, $7FFF
+    dw $1842, $414A, $6252, $7FFF
+    dw $1842, $414A, $6252, $7FFF
+    dw $1842, $6B5A, $7BDE, $7FFF          ; 7: el medidor estelar mientras el poder está activo
 CgbObjPalettesEnd:
 
 LoadPalettes:

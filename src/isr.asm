@@ -20,34 +20,14 @@ VBlankISR:
     and a
     jr nz, .late
 
-    ; 1. OAM: DMA completo (160 M) solo al armar la pantalla; después solo cambian los 5 tiles de los aros
+    ; 1. OAM: DMA completo (160 M) solo cuando cambió algo (aros, medidores)
     ld a, [wOamDirty]
     and a
     jr z, .noOam
-    cp 1
-    jr nz, .ringsOnly
-    call hOamDma
-    jr .oamDone
-.ringsOnly:
-    ld hl, wOam + 2
-    ld de, _OAMRAM + 2
-    ld b, NUM_LANES
-.ringTile:
-    ld a, [hl]
-    ld [de], a
-    ld a, l
-    add 4
-    ld l, a
-    ld a, e
-    add 4
-    ld e, a
-    dec b
-    jr nz, .ringTile
-.oamDone:
     xor a
     ld [wOamDirty], a
-.noOam:
-    ; 2. cola de VRAM
+    call hOamDma
+.noOam:    ; 2. cola de VRAM
     call FlushVQueue
 
     ; 3. scroll y LCDC

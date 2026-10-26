@@ -363,7 +363,7 @@ def enter_initials(r: Runner, text: str) -> None:
 
 def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, bot_name: str, out: Path,
              visual: bool = False, shots: tuple[int, ...] = (40, 400, 1200), seed: int = 1, no_fail: bool = False,
-             pause_at: int | None = None, pause_frames: int = 40, ram=None, initials: str | None = None) -> Result:
+             pause_at: int | None = None, pause_frames: int = 40, ram=None, initials: str | None = None, use_star: bool = False) -> Result:
     data = load_song(song)
     info = data.info
     chart = data.chart(instrument, difficulty)
@@ -397,7 +397,7 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
 
         releases: dict[int, int] = {}  # carril -> cuadro en que se suelta
         held: set[int] = set()
-        state = {"prev_on": note_on_counts(r), "timeline": {}, "paused": False}
+        state = {"prev_on": note_on_counts(r), "timeline": {}, "paused": False, "star_cool": 0, "max_energy": 0, "activations": 0, "was_active": 0}
         hframe = lambda: int.from_bytes(r.read("hFrame", 2), "little")
 
         def on_isr_end(_ctx) -> None:
@@ -416,6 +416,15 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
                 state["timeline"][now_h + pause_frames + 2] = WindowEvent.RELEASE_BUTTON_START
             if r.read("wPlaying")[0] == 0:
                 return
+            energy, active = r.read("wStarEnergy")[0], r.read("wStarActive")[0]
+            state["max_energy"] = max(state["max_energy"], energy)
+            if active and not state["was_active"]:
+                state["activations"] += 1
+            state["was_active"] = active
+            if use_star and not active and energy >= 32 and n >= state["star_cool"]:  # Select activa el poder estelar
+                state["timeline"][now_h] = WindowEvent.PRESS_BUTTON_SELECT
+                state["timeline"][now_h + 2] = WindowEvent.RELEASE_BUTTON_SELECT
+                state["star_cool"] = n + 8
             cur = note_on_counts(r)
             for ch in range(4):
                 if cur[ch] != state["prev_on"][ch]:
@@ -464,6 +473,7 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
         v["stars"] = r.read("wStars")[0]
         v["notes_total"] = int.from_bytes(r.read("wNotesTotal", 2), "little")
         v["new_record"] = r.read("wNewRecord")[0]
+        v["max_energy"], v["star_activations"] = state["max_energy"], state["activations"]
         if initials:
             enter_initials(r, initials)
             v["rec_text"] = bytes(r.read("wRecText", 20)).decode("ascii")

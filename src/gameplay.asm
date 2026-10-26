@@ -30,6 +30,10 @@ GameplayInit:
     ld [wAirCount], a
     ld [wFailed], a
     ld [wLifeGrace], a
+    ld [wStarEnergy], a
+    ld [wStarActive], a
+    ld [wStarRun], a
+    ld [wStarFail], a
     ld [wScoreUnits], a
     ld [wScoreUnits + 1], a
     ld hl, wScoreDigits
@@ -99,6 +103,12 @@ JudgeFeed:
     jp z, .loop             ; entrada de relleno
     ld b, a                 ; B = carriles
     xor a
+    bit 5, c                ; nota de una frase estelar
+    jr z, .notStar
+    inc a
+.notStar:
+    ld [wTmpStar], a
+    xor a
     bit 6, c
     jr z, .noSust
     ld a, [wInstrument]
@@ -128,6 +138,10 @@ JudgeFeed:
     ld hl, wJQSus
     add hl, de
     ld [hl], c
+    ld hl, wJQStar
+    add hl, de
+    ld a, [wTmpStar]
+    ld [hl], a
     ld hl, wJQFLo
     add hl, de
     ld a, [wJFrame]
@@ -286,6 +300,7 @@ ClassifyDiff:
 
 ; Lo que cambia por cuadro de juego: expira notas, procesa los botones nuevos y rellena la cola.
 JudgeFrame:
+    call StarTick
     ld a, [wLifeGrace]
     and a
     jr z, .noGrace
@@ -322,6 +337,11 @@ JudgeFrame:
     ld hl, wJQMask
     add hl, de
     ld a, [hl]
+    push af
+    ld a, [wJQHead]         ; la entrada que se pierde: ¿era una nota estelar?
+    ld [wScanE], a
+    call StarNoteMiss
+    pop af
     ld b, 5
 .countLanes:
     srl a
@@ -351,6 +371,12 @@ JudgeFrame:
     xor a
     ldh [hPadNew], a
     ei
+    bit PADB_SELECT, b      ; Select activa el poder estelar
+    jr z, .noStar
+    push bc
+    call StarActivate
+    pop bc
+.noStar:
     ld a, b
     call PadToLanes
     ld [wPressLanes], a
@@ -449,6 +475,7 @@ TryHit:
     or [hl]
     ld [hl], a
 .noHold:
+    call StarNoteHit
     jp HitNote
 .nextI:
     ld hl, wScanI
@@ -526,7 +553,14 @@ HitNote:
     ld a, 4
 .setMult:
     ld [wMult], a
-    ; puntaje += 50 * multiplicador (en decenas: 5 * m)
+    ; puntaje += 50 * multiplicador (en decenas: 5 * m); con el poder estelar activo el multiplicador vale el doble
+    ld b, a
+    ld a, [wStarActive]
+    and a
+    ld a, b
+    jr z, .notDoubled
+    add a
+.notDoubled:
     ld b, a
     add a
     add a
@@ -577,6 +611,106 @@ BreakCombo:
     ld [wMuted], a
     ld a, $03
     ld [wHudDirty], a
+    ret
+
+; ---- Poder estelar -------------------------------------------------------------------------------
+; Las notas con el bit $20 forman frases de 4: si aciertas las 4 sin fallar ninguna, la barra sube STAR_PHRASE (un cuarto).
+; Con la mitad o más, Select la activa: el multiplicador vale el doble y la barra se vacía (una llena dura unos 13 s).
+
+; wScanE = índice de la entrada resuelta
+StarNoteHit:
+    ld a, [wScanE]
+    ld e, a
+    ld d, 0
+    ld hl, wJQStar
+    add hl, de
+    ld a, [hl]
+    and a
+    ret z
+    ld hl, wStarRun
+    inc [hl]
+    jr StarCheckEnd
+
+StarNoteMiss:
+    ld a, [wScanE]
+    ld e, a
+    ld d, 0
+    ld hl, wJQStar
+    add hl, de
+    ld a, [hl]
+    and a
+    ret z
+    ld a, 1
+    ld [wStarFail], a
+StarCheckEnd:
+    ld a, [wScanE]          ; la frase sigue si la entrada que viene también es estelar
+    inc a
+    and 15
+    ld e, a
+    ld a, [wJQHead]
+    ld d, a
+    ld a, e
+    sub d
+    and 15
+    ld hl, wJQCount
+    cp [hl]
+    jr nc, .phraseEnd       ; no hay más entradas en la cola: fin de la frase
+    ld d, 0
+    ld hl, wJQStar
+    add hl, de
+    ld a, [hl]
+    and a
+    ret nz
+.phraseEnd:
+    ld a, [wStarFail]
+    and a
+    jr nz, .reset
+    ld a, [wStarRun]
+    and a
+    jr z, .reset
+    ld a, [wStarEnergy]
+    add STAR_PHRASE
+    cp STAR_MAX + 1
+    jr c, .store
+    ld a, STAR_MAX
+.store:
+    ld [wStarEnergy], a
+.reset:
+    xor a
+    ld [wStarRun], a
+    ld [wStarFail], a
+    ret
+
+StarActivate:
+    ld a, [wStarActive]
+    and a
+    ret nz
+    ld a, [wStarEnergy]
+    cp STAR_MIN
+    ret c
+    ld a, 1
+    ld [wStarActive], a
+    ld a, STAR_DRAIN
+    ld [wStarTimer], a
+    ld hl, wHudDirty        ; el multiplicador de la pantalla cambia
+    set 0, [hl]
+    ret
+
+StarTick:
+    ld a, [wStarActive]
+    and a
+    ret z
+    ld hl, wStarTimer
+    dec [hl]
+    ret nz
+    ld [hl], STAR_DRAIN
+    ld hl, wStarEnergy
+    dec [hl]
+    ret nz
+    xor a                   ; se acabó la barra
+    ld [wStarActive], a
+    ld hl, wHudDirty
+    set 0, [hl]
     ret
 
 ; ---- Vida --------------------------------------------------------------------------------------

@@ -59,6 +59,21 @@ def shifted_tiles(art: list[str], k: int) -> tuple[list[str], list[str], list[st
     )
 
 
+TILE_METER = 0x10  # cinco pares de tiles (sprite 8x16): el medidor con 0, 4, 8, 12 y 16 px llenos
+
+
+def meter_tiles() -> list[tuple[str, list[str]]]:
+    """Un segmento de medidor (8x16 px, marco a los lados) lleno de abajo hacia arriba en 0, 4, 8, 12 o 16 px."""
+    tiles = []
+    for level in range(5):
+        fill = 4 * level
+        rows = []
+        for r in range(16):
+            rows.append("3222222" + "3" if r >= 16 - fill else "3......3")
+        tiles += [(f"medidor nivel {level} arriba", rows[:8]), (f"medidor nivel {level} abajo", rows[8:])]
+    return tiles
+
+
 def build_gems_tiles() -> str:
     lines = [
         "# Generado por `gbband build-gems` - no editar a mano",
@@ -79,4 +94,8 @@ def build_gems_tiles() -> str:
             if i:
                 lines.append(f"# {names[lane]}: {name}")
             lines += rows
+    lines.append(f"@{TILE_METER:02X}  ; medidores (sprites 8x16: vida y poder estelar)")
+    for name, rows in meter_tiles():
+        lines.append(f"# {name}")
+        lines += rows
     return "\n".join(lines) + "\n"

@@ -22,6 +22,11 @@ DEF LIFE_MAX   EQU 40
 DEF LIFE_START EQU 28           ; dos tercios
 DEF LIFE_LOSS  EQU 2
 DEF LIFE_GRACE EQU 8            ; cuadros después de perder vida en que los fallos no cuestan más
+; --- Poder estelar (la barra llena son 64; cada frase de 4 notas suma 16; con la mitad se puede activar) --------
+DEF STAR_MAX   EQU 64
+DEF STAR_PHRASE EQU 16
+DEF STAR_MIN   EQU 32
+DEF STAR_DRAIN EQU 12           ; cuadros por unidad de barra mientras está activo (la barra llena dura ~13 s)
 DEF PAUSE_WY   EQU 56           ; la Window sube a ese renglón durante la pausa y tapa la autopista
 
 ; --- Reglas ---------------------------------------------------------------------
@@ -45,6 +50,7 @@ DEF TILE_EDGE_L   EQU $08
 DEF TILE_EDGE_R   EQU $09
 DEF TILE_RING     EQU $0A       ; sprite 8x16
 DEF TILE_RING_ON  EQU $0C
+DEF TILE_METER    EQU $10       ; 5 pares de tiles (sprites 8x16): segmento de medidor con 0, 4, 8, 12 y 16 px llenos
 DEF TILE_TAIL_L   EQU $0E       ; cola de las notas sostenidas (mitad izquierda y derecha del carril)
 DEF TILE_TAIL_R   EQU $0F
 DEF TILE_GEM      EQU $60       ; 14 tiles por carril (ver gemgen.py)
