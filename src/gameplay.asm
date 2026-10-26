@@ -633,6 +633,13 @@ AirStrum:
     inc [hl]
     ld b, 1
     call LifeLoss
+    push bc                 ; el efecto de fallo es solo para el golpe al aire (como en Rock Band): una nota que se pasa sin
+    push de                 ; tocarla solo calla el instrumento
+    push hl
+    call MissFx
+    pop hl
+    pop de
+    pop bc
 BreakCombo:
     xor a
     ld hl, wComboDigits
@@ -644,15 +651,6 @@ BreakCombo:
     ld [wMuted], a
     ld a, $03
     ld [wHudDirty], a
-    push af
-    push bc
-    push de
-    push hl
-    call MissFx
-    pop hl
-    pop de
-    pop bc
-    pop af
     ret
 
 ; ---- Poder estelar -------------------------------------------------------------------------------

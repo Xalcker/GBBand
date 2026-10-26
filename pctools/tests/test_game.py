@@ -256,14 +256,18 @@ def test_poder_estelar(rom_b, mode):
 
 @pytest.mark.parametrize("mode", MODES)
 def test_efecto_al_fallar(rom_b, mode):
-    """Al fallar suena un efecto (tres, sin repetir el anterior); con SI además tiembla la autopista y se tiñe de rojo.
+    """Al rasguear en falso suena un efecto (tres, sin repetir el anterior); con SI además tiembla la autopista y se tiñe de rojo.
     Con SOLO SONIDO no hay temblor, con NO no hay nada, y en una racha de fallos se repite a lo más 3 veces por segundo.
     La opción no cambia el juego: el puntaje es el mismo."""
     song = QUICK_SONGS[0]
     runs = {}
     for opt in (0, 1, 2):
-        runs[opt] = playtest.run_case(rom_b, mode, song, "teclado", "experto", "sin-tocar",
+        runs[opt] = playtest.run_case(rom_b, mode, song, "teclado", "experto", "machacando",
                                       out_dir(song, f"fx{opt}", "teclado", "experto", mode), no_fail=True, options={"fx": opt})
+    # una nota que se pasa sin tocarla solo calla el instrumento: sin sonido ni temblor (como en Rock Band)
+    idle = playtest.run_case(rom_b, mode, song, "teclado", "experto", "sin-tocar",
+                             out_dir(song, "fx-idle", "teclado", "experto", mode), no_fail=True)
+    assert idle.values["misses"] > 20 and idle.values["sfx_starts"] == 0 and idle.values["max_scx"] == 0
     full, sound, off = (runs[i].values for i in (0, 1, 2))
     assert full["sfx_starts"] >= 5 and len(full["sfx_ids"]) == 3
     times = full["sfx_times"]

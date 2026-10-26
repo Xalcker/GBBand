@@ -113,7 +113,7 @@ Decisiones menores que tomé yo, con su motivo. Las de gran tamaño se proponen 
 
 ## Fase 4 (el juego completo)
 
-15. **Efecto al fallar.** Tres efectos (clank, thud, bwomp) escritos como tablas de frecuencias en `src/fx.asm` (no en
+15. **Efecto al fallar** (solo al rasguear en falso; una nota que se pasa sin tocarla solo calla el instrumento, como NESBand desde el 26-oct-2026). Tres efectos (clank, thud, bwomp) escritos como tablas de frecuencias en `src/fx.asm` (no en
     `audio/efectos.txt`: no hay motor de efectos aparte). Suenan sobre CH2 (CH1 si el instrumento es la guitarra) con la
     ISR, después del stream; al terminar se vuelve a tocar el canal con su sombra (una nota que sonaba se reinicia). La
     envolvente se fija en el primer cuadro y no se vuelve a tocar (nada de "zombie mode"). Temblor = `SCX` de 1 a 2 px en el
