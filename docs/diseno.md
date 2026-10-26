@@ -113,3 +113,7 @@ NSF --> cpu6502.py + nsf.py (APU) -------------+             +--> gbaudio.py -->
 - **Fase 2** (rebanada vertical): autopista, juez, puntaje y combo, stream FRS, ISR con ring de audio. Hecha.
 - **Fase 3** (pipeline de canciones): IR, importador (FamiStudio y NSF), conversor al stream FRS, charts de 4 instrumentos, las
   diez canciones originales, editor de charts con "Escuchar". Hecha; ver [decisiones.md](decisiones.md) para lo que queda pendiente.
+- **Fase 4** (el juego completo): título con música, menú, opciones (espejo, velocidad, caída, práctica con marcas, efecto al
+  fallar), pausa, resultados con estrellas, récords en SRAM, vida y "sin fallo", notas sostenidas, poder estelar, medidores,
+  bombo como barra, escenario con torres, reflectores y público al ritmo, color CGB. Hecha; ver decisiones.md (fase 4).
+  Lo que sigue en la fase 5: importador GBS/VGM, link cable (2 jugadores) y el pulido de la release.

@@ -21,6 +21,7 @@ src/songs/*
 !src/songs/brisa/
 !src/songs/cumbia/
 !src/songs/amanecer/
+!src/songs/titulo/
 
 # Fuentes privadas (solo para tu copia)
 fonts_private/

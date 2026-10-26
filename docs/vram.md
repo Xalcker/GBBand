@@ -10,18 +10,27 @@ o de `uv run gbband measure-placement`. Lo medido en PyBoy 2.8.1 se cruzó con M
 |---|---|
 | `$00`-`$09` | vacío, carril (izquierda y derecha), marco y paneles del escenario, bordes (`src/chr/ui.tiles`) |
 | `$0A`-`$0D` | aro de los carriles (sprite 8x16, normal y apretado) |
+| `$0E`-`$0F` | cola de las notas sostenidas (izquierda y derecha) |
+| `$10`-`$19` | medidores de vida y de poder estelar (sprites 8x16, 5 niveles) |
+| `$1A`-`$1F` | torres del escenario (celosía, reflector y soporte) y público (brazos abajo, arriba y cuerpos) |
 | `$20`-`$5A` | fuente ASCII en mayúsculas (`font.tiles`): el tile es el código del carácter |
 | `$60`-`$A5` | gemas: 5 carriles x 14 tiles (`gems.tiles`, generado por `gbband build-gems`) |
-| `$A6`-`$FF` | libres (90 tiles) |
+| `$A6`-`$B2` | el bombo de la batería: barra de 10 tiles de ancho, llena y con 3 desplazamientos arriba/abajo, izquierda/derecha |
+| `$B3` | reflector apagado (no se dibuja: se copia sobre `$1B` en cada tiempo) |
+| `$B4`-`$FF` | libres (76 tiles) |
 
 Total usado con la colocación **B**: 143 tiles (los de las gemas: 70). Con la **A** bastarían 83 (gemas: 10), y los
 tiles `$62`-`$A5` salvo los de desplazamiento 0 quedarían libres. En DMG quedan además los 128 tiles del modo `$8800`
 (`LCDC.4`) sin usar; en CGB, todo el banco 1 de VRAM (solo se usa para los atributos del mapa).
 La hoja de contacto de todos los tiles se genera en `build/chr/tiles.png`.
 
-Mapas: `$9800` = fondo con scroll (32x32, autopista y escenario); `$9C00` = Window (HUD de 2 filas, `WY=128`: puntaje y multiplicador, combo y máximo). Los aciertos y fallos solo salen en el resumen del final de la canción, escritos sobre la autopista.
-CGB: atributos del mapa en el banco 1; paleta 0 = escenario y texto, paletas 1 a 5 = los 5 carriles (verde, rojo,
-amarillo, azul, naranja). En DMG los carriles se distinguen por forma: ◀ ▼ ▶ anillo rombo.
+Mapas: `$9800` = fondo con scroll (32x32, autopista y torres del escenario); `$9C00` = Window (2 filas, `WY=128`: el marcador
+ocupa los 10 tiles de la autopista, "000000  X1" y "COMBO  000", y a los lados va el público de 5 tiles; sube a `WY=56` en la pausa).
+Los aciertos y fallos solo salen en el resumen del final de la canción.
+CGB: atributos del mapa en el banco 1; paleta 0 = texto, paletas 1 a 5 = los 5 carriles (verde, rojo, amarillo, azul,
+naranja), 6 = torres y público (acero), 7 = reflectores (la ISR cambia su color con cada tiempo). Sprites: 0 a 4 aros y medidor
+de vida, 3 estrella, 7 estrella activa. En DMG los carriles se distinguen por forma: ◀ ▼ ▶ anillo rombo, y los reflectores
+parpadean entre claro y oscuro con cada tiempo. El efecto al fallar pone `BGP` invertida (DMG) o la paleta 0 en rojo (CGB) 6 cuadros.
 
 ## Colocación A contra B
 
@@ -72,6 +81,19 @@ Lo que costó llegar ahí (fase 3, con canciones de 5 canales y acordes):
 - Ya no se copia todo el OAM por DMA cuando cambia un aro: se copian los 5 tiles (55 M contra 160 M).
 - Una fila vacía del fondo no se escribe si no tenía gemas (en CGB ahorra 20 de los ~26 bytes de la mayoría de las filas).
 - El HUD manda un grupo de dígitos por cuadro.
+## Presupuestos medidos (fase 4: opciones, sostenidas, poder estelar, bombo y escenario; 196 pruebas en DMG y CGB)
+
+| Concepto | Objetivo | Peor caso medido |
+|---|---|---|
+| Bytes copiados a VRAM por cuadro (en partida) | ≤ 96 | **83** (batería con bombo, CGB) |
+| La cola de VRAM termina dentro del VBlank | línea 10 de las 10 | **línea 9** (la batería con barra es el caso justo; sin desbordes) |
+| Bucle principal (resolución 114 M) | ≤ 7000 | **6270** de 17556 (a 125 % se juzgan dos pasos en un cuadro) |
+| Cuadros atrasados | ≤ 2 | **0** |
+| Sprites por línea | ≤ 8 | **5** |
+
+Los textos del menú y de las opciones (más de 100 bytes) se escriben con el LCD apagado y se vacían con `FlushVQueue` antes de
+encenderlo: en el primer VBlank no cabrían. Mesen 2 (CGB) cruzó la partida básica: sin cuadros atrasados ni desbordes.
+
 ## Cómo se mide
 
 - **Error visual:** `playtest.visual_errors` lee el mapa `$9800` y el `SCY` del hardware en el hook de fin de ISR.

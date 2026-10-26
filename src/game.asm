@@ -207,14 +207,15 @@ EnterMenu:
     call PrintStr
     ld a, STATE_MENU
     ld [wState], a
-    call EndTextScreen
     call MenuLoadSong
     call QueueSongText
     call QueueInstrument
     call QueueDifficulty
     call QueueFail
     call RefreshRecord
-    jp QueueCursor
+    call QueueCursor
+    call FlushVQueue        ; con el LCD apagado: no cabría toda la cola en el primer VBlank
+    jp EndTextScreen
 
 ; Elige el banco de la canción (wSong), lee su ficha (instrumentos, título y juego) y deja un instrumento válido.
 MenuLoadSong:

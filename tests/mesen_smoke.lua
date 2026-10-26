@@ -1,4 +1,4 @@
--- Verificación cruzada en Mesen 2 (un segundo emulador): arranca el juego, aprieta Start en el menú, deja correr
+-- Verificación cruzada en Mesen 2 (un segundo emulador): arranca el juego, aprieta Start en el título y en el menú, deja correr
 -- la canción sin tocar nada y guarda lo que quedó en WRAM más una captura de pantalla.
 --
 --   $env:GBBAND_OUT = "C:\ruta\absoluta\mesen.txt"; $env:GBBAND_SYM = "C:\ruta\absoluta\gbband.sym"
@@ -9,7 +9,7 @@
 -- llamar a emu.stop(), Mesen se queda colgado: por eso todo va dentro de pcall.
 local OUT = os.getenv("GBBAND_OUT") or "mesen-smoke.txt"
 local SYM = os.getenv("GBBAND_SYM")
-local START_AT, READ_AT = 120, 900
+local START_AT, READ_AT = 120, 1100   -- Start en el título (120) y otra vez en el menú (START_AT + 80)
 
 local frames = 0
 local symbols = {}
@@ -66,7 +66,7 @@ end
 
 -- La entrada se manda en el evento inputPolled (justo antes de que el juego lea el control)
 local function onInputPolled()
-  if frames >= START_AT and frames < START_AT + 3 then
+  if (frames >= START_AT and frames < START_AT + 3) or (frames >= START_AT + 80 and frames < START_AT + 83) then
     emu.setInput({ start = true }, 0, 0)
   end
 end

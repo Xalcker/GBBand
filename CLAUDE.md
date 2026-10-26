@@ -73,3 +73,13 @@ Mesen de pruebas: `tools\mesen\Mesen.exe --testrunner <rom absoluta> <script.lua
 - **PyBoy y bots:** el menú se maneja con botones de verdad (`playtest.select_in_menu`), no escribiendo en WRAM, porque
   `MenuLoadSong` es lo que fija el banco de la canción.
 - Valor de A al arrancar: `$11` en CGB, `$01` en DMG.
+- **Textos grandes en una pantalla nueva:** con el LCD apagado, encola todo y llama a `FlushVQueue` antes de encender (el primer
+  VBlank no aguanta más de ~90 bytes); el menú y las opciones lo hacen así.
+- **Música del título:** slot propio (banco 112) con `HAS_TITLE_MUSIC` en `build/list_defs.inc`; `src/songs/titulo` va en git
+  (excepción en `.gitignore`) pero no sale en el menú ni en `song_names()` de las pruebas.
+- **Pruebas con opciones:** `playtest.run_case(..., options={"mirror": 1, "speed": 2, ...})` las pone con botones de verdad en la
+  pantalla de opciones; `playtest.run_practice` juega la práctica en bucle con marcas.
+- **Python con cadenas con `
+` desde bash:** no armes parches con heredoc que lleven `
+` dentro de comillas triples (se vuelven
+  saltos de línea reales); usa Edit o un script escrito con Write.

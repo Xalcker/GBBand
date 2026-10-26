@@ -96,7 +96,6 @@ EnterOptions:
     jr nz, .labels
     ld a, STATE_OPTIONS
     ld [wState], a
-    call EndTextScreen
     ld b, 0
 .values:
     push bc
@@ -107,7 +106,9 @@ EnterOptions:
     ld a, b
     cp OPT_COUNT
     jr nz, .values
-    jp QueueOptCursor
+    call QueueOptCursor
+    call FlushVQueue        ; con el LCD apagado
+    jp EndTextScreen
 
 ; A = renglón: encola el texto de su valor
 QueueOptValue:

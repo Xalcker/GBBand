@@ -104,9 +104,41 @@ Decisiones menores que tomé yo, con su motivo. Las de gran tamaño se proponen 
     "Escuchar" toca el stream de la ROM (4 canales; Ruido y DPCM comparten el CH4). `Exportar a la ROM` reimporta la canción.
 13. **Pendiente de la fase 3:** `preview` (WAV de cada pista de un NSF sin .m3u: de momento se importa con `--song N` y se
     escucha en el editor), importador GBS/VGM (fase 5), keyframes y práctica (fase 4), y la prueba de sincronía después de pausar.
-14. **Efecto al fallar (de NESBand v0.3.2, pendiente en la fase 4).** Al fallar (nota que se pasó o golpe al aire) suena uno de
+14. **Efecto al fallar (de NESBand v0.3.2).** Al fallar (nota que se pasó o golpe al aire) suena uno de
     tres efectos (clank, thud, bwomp) sin repetir el anterior, en un canal de pulso que no sea el del instrumento que falla
     (ese canal se calla al fallar). La autopista tiembla (SCX de 1-2 px) y la paleta se tiñe de rojo 6 cuadros, con 14 de
     enfriamiento (a lo más 3 por segundo). Opción EFECTO AL FALLAR (SI / SOLO SONIDO / NO) en la pantalla de opciones; no
     cuenta como opción que bloquee récords. Los efectos viven en `audio/efectos.txt`. Además, de la misma versión: el
     marcador (puntaje y combo) ocupa todo el ancho de la autopista y el público de la franja no deja huecos junto a ella.
+
+## Fase 4 (el juego completo)
+
+15. **Efecto al fallar.** Tres efectos (clank, thud, bwomp) escritos como tablas de frecuencias en `src/fx.asm` (no en
+    `audio/efectos.txt`: no hay motor de efectos aparte). Suenan sobre CH2 (CH1 si el instrumento es la guitarra) con la
+    ISR, después del stream; al terminar se vuelve a tocar el canal con su sombra (una nota que sonaba se reinicia). La
+    envolvente se fija en el primer cuadro y no se vuelve a tocar (nada de "zombie mode"). Temblor = `SCX` de 1 a 2 px en el
+    fondo (la Window no tiembla); rojo = paleta 0 en CGB y `BGP` invertida en DMG. 6 cuadros de efecto y 20 de enfriamiento.
+16. **Opciones.** Seis valores seguidos en `wOpt` (espejo, velocidad, caída, práctica, inicio, efecto). Espejo traduce el chart al
+    leerlo (`MirrorLanes`: verde ↔ naranja, rojo ↔ azul; la batería lo ignora). Caída = otra fila de `SpeedTable`; las gemas
+    se colocan por cuadros del chart, así que la velocidad no cambia el reparto. `wOptionsUsed` bloquea récords (no el efecto).
+17. **Velocidad de la canción (75, 50, 125 %).** Los pasos de la canción (`wT`, juez, audio) siguen un patrón de 4 cuadros reales
+    (`SpeedPattern`: 3, 2 o 5 pasos), el scroll avanza una fracción en cada cuadro (24 bits, 8.16: sin deriva) y el bucle
+    principal juzga los pasos que pasaron (`JudgeSteps`, hasta dos por cuadro). El sonido se ve afectado igual que en NESBand: el
+    APU corre en tiempo real, el stream solo avanza en los pasos. A 125 % las notas del paso intermedio se tocan un paso tarde.
+18. **Práctica.** El inicio adelantado (1/4, 1/2, 3/4 o una marca A) arranca el reloj 120 cuadros antes de la música, omite las
+    notas anteriores (`PracticeSeek` busca la entrada del chart y calcula scroll y filas del fondo como si el reloj llevara
+    corriendo), y el audio parte del keyframe anterior y decodifica el resto con el APU callado (`AudioSeek`, hasta ~1 s con la
+    pantalla apagada). El bucle vuelve a `BeginPlay` al llegar al fin (cuartos o marca B). La práctica pone `wNoFail` en 1 y el
+    menú lo restaura. Las notas que quedan a menos de ~8 cuadros del fin del bucle no se alcanzan a juzgar.
+19. **Bombo.** La nota naranja de la batería es una barra de 10 tiles (13 tiles `$A6`-`$B2`); las gemas de las manos se
+    dibujan encima. Es lo que más VRAM cuesta (hasta 83 bytes por cuadro, la cola termina en la línea 9 de 10): vigilar si se
+    agrega algo más a las filas de la batería. Los platillos (bit `$40` de la batería) todavía se dibujan como toms.
+20. **Escenario.** Torres con celosía y reflectores en las columnas laterales, público en los costados de la Window y marcador a
+    lo ancho de la autopista (como NESBand 0.3.2). Con cada tiempo: el público cambia de pose, los reflectores se encienden o se
+    apagan (se copia un tile) y en CGB cambian de color (paleta 7). Cada cosa va en un cuadro para no pasar la cuota de VRAM.
+21. **Música del título.** `audio/titulo.py` → `audio/titulo.txt` → `gbband import-song ... --name titulo`; vive en su propio slot
+    (banco 112, fuera de la lista del menú; `list-songs` escribe `build/list_defs.inc` con `HAS_TITLE_MUSIC` y `TITLE_BANK`).
+    Sin lead-in y en bucle. Los efectos del menú (mover, aceptar, volver) usan el mismo mecanismo que los del fallo, en CH1; el APU
+    se queda encendido (`ApuOn`) en los menús para que suenen.
+22. **Pendiente de la fase 4 que pasa a la 5:** los platillos con su propio dibujo, la prueba en hardware real y en DMG de Mesen,
+    la verificación de `build.sh` en macOS, y el modo de 2 jugadores por cable.

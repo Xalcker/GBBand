@@ -44,9 +44,22 @@ en `tools/mesen/`.
 
 ## Cómo jugar
 
-En el menú, ↑/↓ cambia de renglón (canción, instrumento, dificultad), ←/→ cambia el valor y Start empieza. Carriles:
-verde ←, rojo ↓, amarillo →, azul B, naranja A. Fácil usa 3 carriles, medio 4 y difícil y experto 5. Al terminar la
-canción, Start vuelve al menú.
+En el título, Start abre el menú. En el menú, ↑/↓ cambia de renglón (canción, instrumento, dificultad, fallo), ←/→ cambia el
+valor, **Select** abre las opciones y Start empieza. Carriles: verde ←, rojo ↓, amarillo →, azul B, naranja A. Fácil usa 3
+carriles, medio 4 y difícil y experto 5. En la batería el bombo es una barra naranja que cruza todos los carriles (botón A).
+
+- **Partida:** puntaje (50 por nota × multiplicador, hasta ×4), combo, vida (si se acaba, tu instrumento se calla y pierdes),
+  sostener las notas con cola da puntos extra. Al fallar tiembla la autopista, se tiñe de rojo y suena un efecto.
+- **Poder estelar:** las notas marcadas en frases de 4; si aciertas las 4 la barra de la izquierda sube. Con la mitad o más,
+  **Select** lo activa y el multiplicador vale el doble hasta que se vacíe. Las estrellas salen del puntaje normal.
+- **Pausa (Start):** Start sigue, Select sale al menú. En la práctica, A y B ponen las marcas del bucle (ver abajo).
+- **Resultados:** porcentaje, estrellas, aciertos y fallos; un récord nuevo pide tus iniciales y se guarda en la batería
+  del cartucho (por canción, instrumento y dificultad; no se guarda con opciones, practicando o en "sin fallo").
+- **Opciones** (Select en el menú; B vuelve): ESPEJO (invierte los carriles), VELOCIDAD (100, 75, 50 o 125 %), CAIDA de
+  notas (AUTO o la de fácil a experto), PRACTICA (el tramo se repite sin fallar, hasta 1/4, 1/2, 3/4 o el final), INICIO de la
+  práctica (principio, 1/4, 1/2, 3/4) y EFECTO AL FALLAR (SI, SOLO SONIDO o NO). Con una opción distinta de la normal (salvo el
+  efecto) no hay récords. En la pausa de la práctica, **A** hace que el bucle empiece 2 s antes de donde pausaste y **B** que
+  termine donde pausaste (el bucle debe durar al menos 4 s); las marcas valen hasta volver al menú.
 
 **Canciones incluidas** (originales de NESBand, GPL-2.0-or-later, componidas en Python con `audio/*.py`): *Primer Ensayo*,
 *Tormenta de Neon* (rock), *Luz de Luna* (balada), *Salto Mortal* (funk), *Marcha del Cartucho*, *Noche sin Estrellas*,

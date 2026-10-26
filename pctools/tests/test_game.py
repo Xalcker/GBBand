@@ -195,6 +195,7 @@ def test_records_se_guardan_y_sobreviven_al_reinicio(rom_b, mode):
     a = playtest.run_case(rom_b, mode, song, "guitarra", "experto", "perfecto", out_dir(song, "record1", "guitarra", "experto", mode),
                           initials="XYZ")
     assert a.values["new_record"] == 1 and a.values["state_after"] == 1
+    assert a.values["overrun"] == 0, "los textos del menú y de las iniciales deben caber en el primer VBlank"
     expected = f"RECORD {a.values['score']:06d} XYZ 5*"
     assert a.values["rec_text"] == expected, a.values["rec_text"]
     # otra partida peor (humano al 90 %) con la misma SRAM: no es récord, y el récord anterior sigue en el menú
