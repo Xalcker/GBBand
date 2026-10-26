@@ -45,6 +45,8 @@ DEF TILE_EDGE_L   EQU $08
 DEF TILE_EDGE_R   EQU $09
 DEF TILE_RING     EQU $0A       ; sprite 8x16
 DEF TILE_RING_ON  EQU $0C
+DEF TILE_TAIL_L   EQU $0E       ; cola de las notas sostenidas (mitad izquierda y derecha del carril)
+DEF TILE_TAIL_R   EQU $0F
 DEF TILE_GEM      EQU $60       ; 14 tiles por carril (ver gemgen.py)
 DEF GEM_STRIDE    EQU 14
 

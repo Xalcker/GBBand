@@ -60,6 +60,8 @@ HighwayInit:
     ld [hl+], a
     dec b
     jr nz, .clearFlags
+    xor a
+    ld [wTailOpen], a
     ld a, 17                ; la primera fila que se arma es la 17 (debajo de la línea de golpe)
     ld [wBuildQ], a
     xor a
@@ -139,13 +141,26 @@ FetchNote:
     ld b, a                 ; B = cuadros desde la entrada anterior
     ld a, [hl+]
     cp $FF
-    jr z, .end
-    bit 7, a
-    jr z, .notRelease
-    xor a                   ; fin de una cola ($80): las colas todavía no se dibujan, se ignora
-.notRelease:
+    jp z, .end
+    ld c, a                 ; C = el byte del chart: carriles ($1F), cola ($40) y fin de cola ($80)
     and $1F
     ld [wNMask], a
+    xor a
+    bit 7, c
+    jr z, .notEnd
+    inc a
+.notEnd:
+    ld [wNEnd], a           ; 1 = esta entrada cierra la cola de sus carriles
+    xor a
+    bit 6, c
+    jr z, .noSust
+    ld a, [wInstrument]     ; en la batería el bit $40 es un platillo, no una cola
+    cp 3
+    ld a, 0
+    jr z, .noSust
+    inc a
+.noSust:
+    ld [wNSust], a
     ld a, l
     ld [wBCur], a
     ld a, h
@@ -255,6 +270,22 @@ BuildRow:
     dec b
     jr nz, .attr
 
+    ld a, [wTailOpen]       ; las colas abiertas se dibujan antes que las gemas de la fila
+    and a
+    jr z, .notes
+    ld c, a
+    ld b, 0
+.tailLane:
+    srl c
+    jr nc, .tailNext
+    push bc
+    call PlaceTail
+    pop bc
+.tailNext:
+    inc b
+    ld a, b
+    cp NUM_LANES
+    jr nz, .tailLane
 .notes:
     ld a, [wNMask]
     and a
@@ -267,7 +298,27 @@ BuildRow:
     sbc [hl]
     bit 7, a
     jr nz, .emit            ; negativo: la nota está más adelante
+    ld a, [wNEnd]
+    and a
+    jr z, .gem
+    ld a, [wNMask]          ; fin de cola: esa fila todavía lleva la barra, las siguientes ya no
+    cpl
+    ld b, a
+    ld a, [wTailOpen]
+    and b
+    ld [wTailOpen], a
+    jr .nextNote
+.gem:
     call PlaceNote
+    ld a, [wNSust]
+    and a
+    jr z, .nextNote
+    ld a, [wNMask]          ; la cola empieza en la fila siguiente
+    ld b, a
+    ld a, [wTailOpen]
+    or b
+    ld [wTailOpen], a
+.nextNote:
     call FetchNote
     jr .notes
 .emit:
@@ -298,6 +349,30 @@ BuildRow:
     ld a, [hl]
     sbc 0
     ld [hl], a
+    ret
+
+; B = carril: la barra de la cola en esa fila
+PlaceTail:
+    ld a, b
+    add a
+    ld e, a
+    ld d, 0
+    ld hl, wRowTiles
+    add hl, de
+    ld a, TILE_TAIL_L
+    ld [hl+], a
+    ld a, TILE_TAIL_R
+    ld [hl], a
+    ld a, b
+    inc a
+    ld c, a
+    ld hl, wRowAttr
+    add hl, de
+    ld a, c
+    ld [hl+], a
+    ld [hl], a
+    ld a, 1
+    ld [wRowHas], a
     ret
 
 ; Pone la gema de wNMask en el buffer de la fila (y el parche de abajo si cruza dos filas).

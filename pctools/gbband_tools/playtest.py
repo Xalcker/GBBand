@@ -53,6 +53,7 @@ class SongData:
     name: str
     info: dict
     charts: dict  # (instrumento, dificultad) -> [(cuadro, máscara de carriles)], sin las entradas de fin de cola
+    tails: dict  # (instrumento, dificultad) -> {(cuadro, carril): cuadro en que termina su cola}
     note_on: dict  # canal 0-3 -> cuadros de la canción (con el lead-in) en que el stream dispara una nota
 
     def chart(self, instrument: str, difficulty: str) -> list[tuple[int, int]]:
@@ -66,13 +67,16 @@ def load_song(name: str) -> SongData:
     folder = SONGS_DIR / name
     info = json.loads((folder / "info.json").read_text(encoding="utf-8"))
     charts = {}
+    tails = {}
     for path in folder.glob("chart_*.bin"):
         _, instrument, difficulty = path.stem.split("_")
         notes = entries_to_chart(parse_chart_bytes(path.read_bytes()), instrument == "bateria")
         charts[(instrument, difficulty)] = [(n.frame, n.mask & LANE_MASK) for n in notes]
+        tails[(instrument, difficulty)] = {(n.frame, lane): n.end for n in notes if n.end and instrument != "bateria"
+                                           for lane in lanes_of(n.mask)}
     stream = (folder / "stream_b.bin").read_bytes() + (folder / "stream_c.bin").read_bytes()
     on = gb.note_on_frames(gb.decode_stream(stream))
-    return SongData(name, info, charts, {ch: [info["lead_in"] + f for f in frames] for ch, frames in on.items()})
+    return SongData(name, info, charts, tails, {ch: [info["lead_in"] + f for f in frames] for ch, frames in on.items()})
 
 
 def select_in_menu(r: Runner, song: int, instrument: int, difficulty: int, no_fail: bool = False) -> None:
@@ -162,6 +166,9 @@ class Bot:
     def presses(self, t: int) -> list[int]:
         return []
 
+    def release_at(self, t: int, lane: int) -> int:
+        return t + HOLD_FRAMES
+
 
 class PerfectBot(Bot):
     name = "perfecto"
@@ -174,6 +181,16 @@ class PerfectBot(Bot):
 
     def presses(self, t):
         return self.plan.get(t, [])
+
+
+class HoldBot(PerfectBot):
+    """Perfecto que además sostiene las notas con cola hasta donde terminan."""
+
+    name = "sostiene"
+    tails: dict = {}
+
+    def release_at(self, t, lane):
+        return self.tails.get((t, lane), t + HOLD_FRAMES)
 
 
 class IdleBot(Bot):
@@ -233,7 +250,7 @@ class Human45Bot(HumanBot):
     hit_rate = 0.45
 
 
-BOTS = {"perfecto": PerfectBot, "sin-tocar": IdleBot, "machacando": MasherBot, "humano90": Human90Bot, "humano45": Human45Bot}
+BOTS = {"perfecto": PerfectBot, "sostiene": HoldBot, "sin-tocar": IdleBot, "machacando": MasherBot, "humano90": Human90Bot, "humano45": Human45Bot}
 
 
 # ---------------------------------------------------------------------------- medición visual
@@ -353,6 +370,8 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
     channel = INSTRUMENTS.index(instrument)
     s = layout.speed_8_8(difficulty)
     bot = BOTS[bot_name](chart, seed)
+    if isinstance(bot, HoldBot):
+        bot.tails = data.tails[(instrument, difficulty)]
     result = Result(str(rom.name), mode, difficulty, bot_name, song, instrument,
                     total_notes=sum(len(lanes_of(m)) for _, m in chart))
     lead_in = info["lead_in"]
@@ -414,7 +433,7 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
                 if lane not in held:
                     r.pb.send_input(PRESS[lane], 1)
                     held.add(lane)
-                releases[lane] = t + HOLD_FRAMES
+                releases[lane] = bot.release_at(t, lane)
             for lane in [l for l, until in releases.items() if t >= until]:
                 r.pb.send_input(RELEASE[lane], 1)
                 held.discard(lane)

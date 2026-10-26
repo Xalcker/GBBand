@@ -214,3 +214,25 @@ def test_records_se_guardan_y_sobreviven_al_reinicio(rom_b, mode):
         r.tick(5)
         playtest.select_in_menu(r, playtest.song_names().index(song), 0, 3)
         assert bytes(r.read("wRecText", 20)).decode("ascii") == expected
+
+
+@pytest.mark.parametrize("mode", MODES)
+@pytest.mark.parametrize("song,instrument,difficulty", [("demo", "guitarra", "experto"), ("demo", "guitarra", "facil"),
+                                                         ("salto", "teclado", "medio"), ("carrera", "teclado", "dificil")])
+def test_sostener_las_colas_suma_puntos_que_no_cuentan_para_las_estrellas(rom_b, mode, song, instrument, difficulty):
+    """Quien sostiene las notas largas suma 10 puntos cada 8 cuadros de cola (no rompe nada si suelta antes) y esos puntos no
+    cuentan para las estrellas ni para el máximo posible."""
+    data = playtest.load_song(song)
+    tails = data.tails[(instrument, difficulty)]
+    assert tails, "la prueba necesita una canción con colas"
+    held = playtest.run_case(rom_b, mode, song, instrument, difficulty, "sostiene",
+                             out_dir(song, "sostiene", instrument, difficulty, mode), shots=(300, 900))
+    tapped = playtest.run_case(rom_b, mode, song, instrument, difficulty, "perfecto",
+                               out_dir(song, "perfecto-colas", instrument, difficulty, mode))
+    common_checks(held)
+    assert held.values["hits"] == held.total_notes and held.values["misses"] == 0
+    extra = held.values["score"] - playtest.expected_score(held.total_notes)
+    assert tapped.values["score"] == playtest.expected_score(held.total_notes), "soltar antes no cambia el puntaje de las notas"
+    assert extra > 0 and extra % 10 == 0
+    assert extra <= 10 * sum((end - frame) // 8 + 1 for (frame, _), end in tails.items())
+    assert held.values["pct"] == 100 and held.values["stars"] == 5

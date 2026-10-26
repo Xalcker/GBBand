@@ -16,6 +16,13 @@ GameplayInit:
     ld [wJFrame], a
     ld [wJFrame + 1], a
     ld [wJEnd], a
+    ld [wHold], a
+    ld hl, wHoldTick
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl], a
     ld [wJQHead], a
     ld [wJQCount], a
     ld [wHeldPrev], a
@@ -40,13 +47,15 @@ GameplayInit:
     jp JudgeFeed
 
 ; Llena la cola con las siguientes entradas del chart (el banco de la canción debe estar activo).
+; Una entrada con el bit $40 es una nota con cola (salvo en la batería, donde es un platillo); una con el bit $80 es el fin
+; de la cola de sus carriles y no entra a la cola de notas: solo anota en wTailEnd el cuadro en que termina.
 JudgeFeed:
 .loop:
     ld a, [wJEnd]
     and a
     ret nz
     ld a, [wJQCount]
-    cp 8
+    cp 16
     ret nc
     ld a, [wJCur]
     ld l, a
@@ -75,18 +84,48 @@ JudgeFeed:
     inc [hl]
 .noCarry:
     bit 7, c
-    jr nz, .loop            ; fin de una cola ($80): todavía no se juegan las colas
+    jr z, .lanesEntry
+    ld a, [wJFrame]         ; fin de cola
+    ld e, a
+    ld a, [wJFrame + 1]
+    ld d, a
     ld a, c
     and $1F
-    jr z, .loop             ; entrada de relleno
-    ld c, a
+    call SetTailEnd
+    jp .loop
+.lanesEntry:
+    ld a, c
+    and $1F
+    jp z, .loop             ; entrada de relleno
+    ld b, a                 ; B = carriles
+    xor a
+    bit 6, c
+    jr z, .noSust
+    ld a, [wInstrument]
+    cp 3
+    ld a, 0
+    jr z, .noSust
+    inc a
+.noSust:
+    ld c, a                 ; C = la entrada tiene cola
+    and a
+    jr z, .push
+    ld de, $FFFF            ; la cola de estos carriles termina en algún cuadro que todavía no se lee
+    ld a, b
+    push bc
+    call SetTailEnd
+    pop bc
+.push:
     ld a, [wJQHead]
     ld hl, wJQCount
     add [hl]
-    and 7
+    and 15
     ld e, a
     ld d, 0
     ld hl, wJQMask
+    add hl, de
+    ld [hl], b
+    ld hl, wJQSus
     add hl, de
     ld [hl], c
     ld hl, wJQFLo
@@ -99,8 +138,105 @@ JudgeFeed:
     ld [hl], a
     ld hl, wJQCount
     inc [hl]
-    jr .loop
+    jp .loop
 
+; A = carriles, DE = cuadro: lo anota como el fin de la cola de esos carriles
+SetTailEnd:
+    ld c, a
+    ld hl, wTailEnd
+    ld b, NUM_LANES
+.lane:
+    srl c
+    jr nc, .next
+    ld a, e
+    ld [hl+], a
+    ld a, d
+    ld [hl-], a
+.next:
+    inc hl
+    inc hl
+    dec b
+    jr nz, .lane
+    ret
+
+; Sostener: cada cuadro con el botón de un carril con cola apretado y antes de su fin suma 10 puntos cada 8 cuadros y
+; 1 de vida cada 32; soltar antes solo deja de sumar (no rompe el combo ni calla al instrumento). No cuenta para las
+; estrellas (esas salen solo de las notas).
+HoldFrame:
+    ld a, [wHold]
+    and a
+    ret z
+    ld c, a
+    ld b, 0
+.lane:
+    srl c
+    jr nc, .next
+    push bc
+    call HoldLane
+    pop bc
+.next:
+    inc b
+    ld a, b
+    cp NUM_LANES
+    jr nz, .lane
+    ret
+
+; B = carril que se está sosteniendo
+HoldLane:
+    ld e, b
+    ld d, 0
+    ld hl, LaneBit
+    add hl, de
+    ld a, [hl]
+    ld [wTryBit], a
+    ld hl, wHeld
+    and [hl]
+    jr z, .stop             ; soltó el botón
+    ld a, b
+    add a
+    ld e, a
+    ld hl, wTailEnd
+    add hl, de
+    ld a, [hl+]
+    ld e, a
+    ld d, [hl]
+    ld a, [wTJ]
+    sub e
+    ld a, [wTJ + 1]
+    sbc d
+    jr nc, .stop            ; llegó al fin de la cola
+    ld e, b
+    ld d, 0
+    ld hl, wHoldTick
+    add hl, de
+    inc [hl]
+    ld c, [hl]
+    ld a, c
+    and 7
+    jr nz, .noScore
+    push bc
+    ld a, 1
+    call ScoreAddTens
+    ld hl, wHudDirty
+    set 0, [hl]
+    pop bc
+.noScore:
+    ld a, c
+    and 31
+    ret nz
+    jp LifeGain
+.stop:
+    ld a, [wTryBit]
+    cpl
+    ld hl, wHold
+    and [hl]
+    ld [hl], a
+    ld e, b
+    ld d, 0
+    ld hl, wHoldTick
+    add hl, de
+    ld [hl], 0
+    ret
 ; BC = (cuadro de la entrada E) - wTJ, con signo. Clobbera A, D, HL.
 JQDiff:
     ld d, 0
@@ -201,7 +337,7 @@ JudgeFrame:
 .popHead:
     ld a, [wJQHead]
     inc a
-    and 7
+    and 15
     ld [wJQHead], a
     ld hl, wJQCount
     dec [hl]
@@ -237,6 +373,7 @@ JudgeFrame:
     ldh a, [hPad]
     call PadToLanes
     ld [wHeld], a
+    call HoldFrame
 
     ; 3. quitar del frente las entradas ya resueltas
 .popZeros:
@@ -253,7 +390,7 @@ JudgeFrame:
     jr nz, .feed
     ld a, [wJQHead]
     inc a
-    and 7
+    and 15
     ld [wJQHead], a
     ld hl, wJQCount
     dec [hl]
@@ -278,7 +415,7 @@ TryHit:
     jr nc, .air
     ld hl, wJQHead
     add [hl]
-    and 7
+    and 15
     ld e, a
     ld [wScanE], a
     call JQDiff
@@ -299,6 +436,19 @@ TryHit:
     cpl
     and [hl]
     ld [hl], a              ; carril acertado
+    ld a, [wScanE]          ; ¿la entrada tiene cola? entonces el carril se empieza a sostener
+    ld e, a
+    ld d, 0
+    ld hl, wJQSus
+    add hl, de
+    ld a, [hl]
+    and a
+    jr z, .noHold
+    ld a, [wTryBit]
+    ld hl, wHold
+    or [hl]
+    ld [hl], a
+.noHold:
     jp HitNote
 .nextI:
     ld hl, wScanI

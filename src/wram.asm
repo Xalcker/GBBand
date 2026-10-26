@@ -129,9 +129,16 @@ wJFrame::       ds 2
 wJEnd::         ds 1
 wJQHead::       ds 1
 wJQCount::      ds 1
-wJQFLo::        ds 8
-wJQFHi::        ds 8
-wJQMask::       ds 8
+wJQFLo::        ds 16
+wJQFHi::        ds 16
+wJQMask::       ds 16
+wJQSus::        ds 16    ; la entrada es de notas sostenidas (con cola)
+wTailEnd::      ds 10    ; por carril: cuadro en que termina su cola ($FFFF = todavía no se sabe)
+wHold::         ds 1     ; carriles que se están sosteniendo
+wHoldTick::     ds 5
+wNEnd::         ds 1     ; la entrada que se leyó es un fin de cola
+wNSust::        ds 1     ; la nota que se leyó tiene cola
+wTailOpen::     ds 1     ; carriles con una cola abierta en la fila que se arma
 wPressLanes::   ds 1
 wTryBit::       ds 1
 wScanI::        ds 1

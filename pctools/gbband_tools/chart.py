@@ -195,7 +195,7 @@ class ChartNote:
     cymbal: bool = False  # solo en la batería (no usa colas): el pad es un platillo, no un tom; va en el bit $40
 
 
-def sustain_ends(notes: list[Note], lanes: list[int | tuple[int, ...]]) -> list[int | None]:
+def sustain_ends(notes: list[Note], lanes: list[int | tuple[int, ...]], gap: int = SUSTAIN_GAP) -> list[int | None]:
     """Fin de la cola de cada nota, o None si dura muy poco.
 
     La cola dura lo que la nota, pero termina antes de la siguiente nota que comparta un
@@ -208,7 +208,7 @@ def sustain_ends(notes: list[Note], lanes: list[int | tuple[int, ...]]) -> list[
         limit = note.frame + note.duration
         for other, other_lanes in zip(notes[i + 1 :], sets[i + 1 :]):
             if lanes_clash(other_lanes, sets[i]):
-                limit = min(limit, other.frame - SUSTAIN_GAP)
+                limit = min(limit, other.frame - gap)
                 break
         length = limit - note.frame - SUSTAIN_TRIM
         ends.append(note.frame + length if length >= MIN_SUSTAIN else None)
@@ -312,7 +312,9 @@ def build_chart(
     lanes = assign_lanes(reduced, difficulty.lanes, window=KEYS_WINDOW if role == "keys" else 4)
     masks = chord_masks(reduced, lanes, difficulty, grid, role, merge_attacks(partner or []))
     reduced, masks = enforce_lane_gap(reduced, masks, difficulty, move=True, stats=stats)
-    ends = sustain_ends(reduced, [tuple(b for b in range(5) if mask >> b & 1) for mask in masks])
+    # La cola ocupa tiles del carril: la siguiente gema del carril debe quedar a la separación mínima de la colocación B
+    gap = layout.min_lane_gap_frames(layout.speed_8_8(difficulty.name), "B")
+    ends = sustain_ends(reduced, [tuple(b for b in range(5) if mask >> b & 1) for mask in masks], gap)
     stars = star_notes(len(reduced), [mask & (mask - 1) != 0 for mask in masks])
     return [
         ChartNote(lead_in + note.frame, mask, None if end is None else lead_in + end, star)
