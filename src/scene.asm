@@ -35,10 +35,11 @@ StageDraw:
     add TILE_PANEL
     ld c, a                 ; C = tile del panel de esta fila
     ld a, TILE_FRAME
-    ld [hl+], a             ; columna 0
-    ld a, c
-    ld [hl+], a             ; 1-3
+    ld [hl+], a             ; columna 0: torre del escenario (marco, celosía y reflector)
+    ld a, TILE_TRUSS
     ld [hl+], a
+    ld [hl+], a
+    call .lampTile
     ld [hl+], a
     ld a, TILE_EDGE_L
     ld [hl+], a             ; 4
@@ -52,8 +53,9 @@ StageDraw:
     jr nz, .lane
     ld a, TILE_EDGE_R
     ld [hl+], a             ; 15
-    ld a, c
-    ld [hl+], a             ; 16-18
+    call .lampTile
+    ld [hl+], a             ; 16
+    ld a, TILE_TRUSS
     ld [hl+], a
     ld [hl+], a
     ld a, TILE_FRAME
@@ -65,6 +67,60 @@ StageDraw:
     ld a, b
     cp 32
     jr nz, .row
+    jr StageAttrs
+
+; A = tile del reflector de la fila B (uno cada dos filas, con su soporte entre ellos)
+.lampTile:
+    ld a, b
+    and 1
+    ld a, TILE_LAMP
+    ret z
+    ld a, TILE_STEM
+    ret
+
+; CGB: los atributos de las torres (paleta 6 y, en los reflectores, la 7 que cambia de color con cada tiempo)
+StageAttrs:
+    ldh a, [hCGB]
+    and a
+    ret z
+    ld a, 1
+    ldh [rVBK], a
+    ld hl, _SCRN0
+    ld b, 0
+.arow:
+    ld a, 6
+    ld [hl+], a             ; 0-2
+    ld [hl+], a
+    ld [hl+], a
+    ld a, b
+    and 1
+    ld a, 7
+    jr z, .lamp0
+    ld a, 6
+.lamp0:
+    ld [hl+], a             ; 3
+    inc hl                  ; 4 a 15: fondo de los carriles (paleta 0)
+    ld de, 11
+    add hl, de
+    ld a, b
+    and 1
+    ld a, 7
+    jr z, .lamp1
+    ld a, 6
+.lamp1:
+    ld [hl+], a             ; 16
+    ld a, 6
+    ld [hl+], a             ; 17-19
+    ld [hl+], a
+    ld [hl+], a
+    ld de, 12
+    add hl, de
+    inc b
+    ld a, b
+    cp 32
+    jr nz, .arow
+    xor a
+    ldh [rVBK], a
     ret
 
 ; Paletas de la CGB (BGR555): 0 = escenario y texto; 1 a 5 = verde, rojo, amarillo, azul, naranja
@@ -75,8 +131,8 @@ CgbBgPalettes:
     dw $1842, $098E, $0F7F, $7FFF
     dw $1842, $38C3, $7186, $7FFF
     dw $1842, $04EE, $0A1F, $7FFF
-    dw $1842, $414A, $6252, $7FFF
-    dw $1842, $414A, $6252, $7FFF
+    dw $1042, $5ED6, $3D8C, $0C21         ; 6: torres del escenario y público (acero)
+    dw $1042, $211F, $0852, $0C21         ; 7: reflectores (cambian de color con cada tiempo)
 CgbBgPalettesEnd:
 
 ; Sprites: los aros usan los colores de su carril (paleta 0 a 4)

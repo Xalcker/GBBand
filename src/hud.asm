@@ -7,9 +7,9 @@ SECTION "HUD", ROM0
 DEF HUD_ROW0 EQU _SCRN1               ; PUNTOS 000000  X1
 DEF HUD_ROW1 EQU _SCRN1 + 32          ; COMBO 000 MAX 000
 
-HudText0: db "PUNTOS 000000  X1", 0
-HudText1: db "COMBO 000 MAX 000", 0
-TxtFailed: db "FALLASTE         "
+HudText0: db "000000  X1", 0
+HudText1: db "COMBO  000", 0
+TxtFailed: db " FALLASTE "
 ; Más abajo en el mapa de la Window (no se ve salvo en la pausa, cuando la Window sube a PAUSE_WY)
 TxtPaused:   db "PAUSA", 0
 TxtResume:   db "START: SEGUIR", 0
@@ -19,12 +19,13 @@ TxtMarkB:    db "B: FIN AQUI", 0
 
 ; Escribe el texto fijo del HUD (LCD apagado)
 HudDraw:
-    ld de, HUD_ROW0
+    ld de, HUD_ROW0 + 5          ; el marcador ocupa el ancho de la autopista; a los lados, el público
     ld hl, HudText0
     call PrintStr
-    ld de, HUD_ROW1
+    ld de, HUD_ROW1 + 5
     ld hl, HudText1
     call PrintStr
+    call CrowdDraw
     ld de, _SCRN1 + 32 * 3 + 7
     ld hl, TxtPaused
     call PrintStr
@@ -53,7 +54,7 @@ HudUpdate:
     res 0, a
     ld [wHudDirty], a
     ld hl, wScoreDigits
-    ld de, HUD_ROW0 + 7
+    ld de, HUD_ROW0 + 5
     ld b, 6
     call QueueDigits
     ld a, [wMult]
@@ -66,7 +67,7 @@ HudUpdate:
 .multShown:
     ld [wQDigit], a
     ld hl, wQDigit
-    ld de, HUD_ROW0 + 16
+    ld de, HUD_ROW0 + 14
     ld b, 1
     jp QueueDigits
 .notScore:
@@ -75,8 +76,8 @@ HudUpdate:
     res 2, a
     ld [wHudDirty], a
     ld hl, TxtFailed          ; "FALLASTE": reemplaza el renglón del combo
-    ld de, HUD_ROW1
-    ld b, 17
+    ld de, HUD_ROW1 + 5
+    ld b, 10
     jp QueueRaw
 .notFail:
     bit 1, a
@@ -89,11 +90,7 @@ HudUpdate:
     res 1, a
     ld [wHudDirty], a
     ld hl, wComboDigits
-    ld de, HUD_ROW1 + 6
-    ld b, 3
-    call QueueDigits
-    ld hl, wMaxComboDigits
-    ld de, HUD_ROW1 + 14
+    ld de, HUD_ROW1 + 12
     ld b, 3
     jp QueueDigits
 .notCombo:

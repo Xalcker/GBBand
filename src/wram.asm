@@ -209,6 +209,16 @@ wSfxFirst::     ds 1
 wSfxDuty::      ds 1
 wSfxEnv::       ds 1
 
+; --- escenario ---
+wBeatNext::     ds 2     ; cuadro del siguiente tiempo
+wBeatLen::      ds 1
+wBeatPending::  ds 1     ; trabajo del tiempo que falta por encolar (un bit por cosa)
+wCrowdPhase::   ds 1
+wLampLit::      ds 1
+wLampHue::      ds 1
+wLampReq::      ds 1     ; la ISR cambia el color de los reflectores (paso + 1)
+wCrowdBuf::     ds 5
+
 wVQDummy::      ds 128   ; destino inofensivo cuando la cola se llena
 
 ; ---- HRAM --------------------------------------------------------------------

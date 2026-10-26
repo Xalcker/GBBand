@@ -51,6 +51,13 @@ DEF TILE_EDGE_L   EQU $08
 DEF TILE_EDGE_R   EQU $09
 DEF TILE_RING     EQU $0A       ; sprite 8x16
 DEF TILE_RING_ON  EQU $0C
+DEF TILE_TRUSS    EQU $1A       ; torres del escenario: celosía, reflector y su soporte
+DEF TILE_LAMP     EQU $1B
+DEF TILE_STEM     EQU $1C
+DEF TILE_CROWD_DOWN EQU $1D     ; público: arriba con los brazos abajo / arriba, y los cuerpos
+DEF TILE_CROWD_UP EQU $1E
+DEF TILE_CROWD_BODY EQU $1F
+DEF TILE_LAMP_OFF EQU $B3       ; (no se dibuja: se copia sobre TILE_LAMP en cada tiempo)
 DEF TILE_METER    EQU $10       ; 5 pares de tiles (sprites 8x16): segmento de medidor con 0, 4, 8, 12 y 16 px llenos
 DEF TILE_TAIL_L   EQU $0E       ; cola de las notas sostenidas (mitad izquierda y derecha del carril)
 DEF TILE_TAIL_R   EQU $0F

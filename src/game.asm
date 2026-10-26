@@ -445,6 +445,7 @@ BeginPlay:
     ld a, [$4000 + SONG_END + 1]
     ld [wEndFrame + 1], a
     call PracticeSetup
+    call StageBeatInit
 
     call FxClear
     call ApplyOptions
@@ -574,6 +575,7 @@ PlayFrame:
     call UpdateOam
     call MeterUpdate
     call FxFrame
+    call StageBeat
     ld a, [wMuted]
     and a
     ld a, $FF

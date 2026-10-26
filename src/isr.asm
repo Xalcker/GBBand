@@ -25,6 +25,10 @@ VBlankISR:
     and a
     call nz, ApplyPalFx
 
+    ld a, [wLampReq]
+    and a
+    call nz, ApplyLampPal
+
     ; 1. OAM: DMA completo (160 M) solo cuando cambió algo (aros, medidores)
     ld a, [wOamDirty]
     and a
