@@ -8,6 +8,8 @@ TxtTitle:    db "GBBAND", 0
 TxtChoose:   db "ELIGE DIFICULTAD", 0
 TxtPress:    db "PRESIONA START", 0
 TxtEnd:      db "FIN DE LA CANCION", 0
+TxtHits:     db "ACIERTOS"
+TxtMiss:     db "FALLOS"
 ; 14 caracteres cada una, con relleno a 16 para indexar con (dificultad << 4)
 DiffText:
     db "<   FACIL    >", 0, 0
@@ -247,26 +249,75 @@ PlayFrame:
     inc [hl]
     ret
 
+; Fin de la canción: se apaga el audio y se escribe el resumen (aciertos y fallos) sobre la autopista, en filas de
+; PANTALLA (el fondo está desplazado, así que se calcula la fila del mapa con el SCY actual).
 EndSong:
     xor a
     ld [wPlaying], a
     call AudioStop
     ld a, STATE_END
     ld [wState], a
-    ldh a, [hScy]           ; el texto va en la fila 6 de la pantalla: con el scroll, es otra fila del mapa
+    ld c, 5
+    ld e, 1
+    call ScreenDest
+    ld hl, TxtEnd
+    ld b, 17
+    call QueueRaw
+    ld c, 7
+    ld e, 3
+    call ScreenDest
+    ld hl, TxtHits
+    ld b, 8
+    call QueueRaw
+    ld c, 7
+    ld e, 12
+    call ScreenDest
+    ld hl, wHitsDigits
+    ld b, 3
+    call QueueDigits
+    ld c, 8
+    ld e, 3
+    call ScreenDest
+    ld hl, TxtMiss
+    ld b, 6
+    call QueueRaw
+    ld c, 8
+    ld e, 12
+    call ScreenDest
+    ld hl, wMissDigits
+    ld b, 3
+    jp QueueDigits
+
+; DE = dirección en el mapa $9800 de la fila de pantalla C, columna E (según el SCY actual)
+ScreenDest:
+    push de
+    ldh a, [hScy]
     srl a
     srl a
     srl a
-    add 6
+    add c
     call RowDest            ; HL = $9800 + fila * 32 + 5
-    ld de, -4
-    add hl, de              ; columna 1
+    pop de
+    ld d, 0
+    add hl, de
+    ld de, -5
+    add hl, de
     ld d, h
     ld e, l
-    ld b, 17
+    ret
+
+; Encola B bytes de HL en la dirección DE de VRAM (banco 0)
+QueueRaw:
+    ld a, l
+    ld [wQSrc], a
+    ld a, h
+    ld [wQSrc + 1], a
     ld c, 0
     call VQAlloc
-    ld de, TxtEnd
+    ld a, [wQSrc]
+    ld e, a
+    ld a, [wQSrc + 1]
+    ld d, a
 .copy:
     ld a, [de]
     inc de
@@ -274,7 +325,6 @@ EndSong:
     dec b
     jr nz, .copy
     ret
-
 EndFrame:
     di
     ldh a, [hPadNew]

@@ -19,7 +19,7 @@ tiles `$62`-`$A5` salvo los de desplazamiento 0 quedarían libres. En DMG quedan
 (`LCDC.4`) sin usar; en CGB, todo el banco 1 de VRAM (solo se usa para los atributos del mapa).
 La hoja de contacto de todos los tiles se genera en `build/chr/tiles.png`.
 
-Mapas: `$9800` = fondo con scroll (32x32, autopista y escenario); `$9C00` = Window (HUD de 3 filas, `WY=120`).
+Mapas: `$9800` = fondo con scroll (32x32, autopista y escenario); `$9C00` = Window (HUD de 2 filas, `WY=128`: puntaje y multiplicador, combo y máximo). Los aciertos y fallos solo salen en el resumen del final de la canción, escritos sobre la autopista.
 CGB: atributos del mapa en el banco 1; paleta 0 = escenario y texto, paletas 1 a 5 = los 5 carriles (verde, rojo,
 amarillo, azul, naranja). En DMG los carriles se distinguen por forma: ◀ ▼ ▶ anillo rombo.
 

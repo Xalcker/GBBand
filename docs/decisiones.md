@@ -59,5 +59,8 @@ Decisiones menores que tomé yo, con su motivo. Las de gran tamaño se proponen 
    bajo del registro), contadores de altas de nota `C800`, variables desde `C900`. HRAM: variables y rutina de OAM DMA.
 10. **Cola de VRAM.** Entradas `[cuenta | $80 = banco 1][dir lo][dir hi][datos]`, terminadas en 0; si se llena, los datos
     van a un buffer inofensivo y se cuenta (`wQOverflow`). Las pruebas exigen 0 desbordes.
-11. **Pendiente de la fase 2 que no se hizo:** pausa y "después de pausar" de la prueba de sincronía (llegan con la pausa
+11. **HUD de 2 filas.** La Window mide 2 filas (`WY=128`); aciertos y fallos salen solo al terminar la canción
+    (`FIN DE LA CANCION`, `ACIERTOS`, `FALLOS`, escritos en filas de pantalla sobre la autopista). El HUD manda un grupo de
+    dígitos por cuadro. La fase 4 los moverá a la pantalla de resultados.
+12. **Pendiente de la fase 2 que no se hizo:** pausa y "después de pausar" de la prueba de sincronía (llegan con la pausa
     de la fase 4); bots "humano" (90 % / 45 %), opciones (espejo, velocidad, práctica) y charts de los otros instrumentos.

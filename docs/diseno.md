@@ -32,7 +32,7 @@ editor de charts y `check_playable`. **Todo se mide en cuadros.**
 ```
 columnas 0-4   escenario izquierdo        columnas 15-19  escenario derecho
 columnas 5-14  autopista: 5 carriles x 2 tiles (x = 40 a 119)
-filas 0-14     fondo con scroll (SCY)     filas 15-17     Window (WY=120, WX=7): HUD
+filas 0-15     fondo con scroll (SCY)     filas 16-17     Window (WY=128, WX=7): puntaje, multiplicador y combo
 aro de aciertos en la fila 13 (y ~ 104)
 ```
 

@@ -31,7 +31,7 @@ GameplayInit:
     jr nz, .clear
     ld a, 1
     ld [wMult], a
-    ld a, $0F
+    ld a, $03
     ld [wHudDirty], a
     jp JudgeFeed
 
@@ -379,7 +379,7 @@ HitNote:
 .unitsDone:
     xor a
     ld [wMuted], a
-    ld a, $0F
+    ld a, $03
     ld [wHudDirty], a
     ret
 
@@ -400,7 +400,7 @@ BreakCombo:
     inc a
     ld [wMult], a
     ld [wMuted], a
-    ld a, $0F
+    ld a, $03
     ld [wHudDirty], a
     ret
 

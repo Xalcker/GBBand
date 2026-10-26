@@ -1,16 +1,14 @@
 ; =============================================================================
-; hud.asm - El marcador de la Window (filas 15 a 17, mapa $9C00) y los aros de los carriles (sprites)
+; hud.asm - El marcador de la Window (filas 16 y 17, mapa $9C00) y los aros de los carriles (sprites)
 ; =============================================================================
 
 SECTION "HUD", ROM0
 
 DEF HUD_ROW0 EQU _SCRN1               ; PUNTOS 000000  X1
 DEF HUD_ROW1 EQU _SCRN1 + 32          ; COMBO 000 MAX 000
-DEF HUD_ROW2 EQU _SCRN1 + 64          ; HIT 000  FALLO 000
 
 HudText0: db "PUNTOS 000000  X1", 0
 HudText1: db "COMBO 000 MAX 000", 0
-HudText2: db "HIT 000  FALLO 000", 0
 
 ; Escribe el texto fijo del HUD (LCD apagado)
 HudDraw:
@@ -19,13 +17,10 @@ HudDraw:
     call PrintStr
     ld de, HUD_ROW1
     ld hl, HudText1
-    call PrintStr
-    ld de, HUD_ROW2
-    ld hl, HudText2
     jp PrintStr
 
 ; Encola UN grupo de dígitos por cuadro (el primero que haya cambiado), para no pasar de la cuota de VRAM de la ISR.
-; wHudDirty: bit 0 puntaje y multiplicador, bit 1 combo y máximo, bit 2 aciertos, bit 3 fallos.
+; wHudDirty: bit 0 puntaje y multiplicador, bit 1 combo y máximo. (Aciertos y fallos solo salen al final de la canción.)
 HudUpdate:
     ld a, [wHudDirty]
     bit 0, a
@@ -56,23 +51,8 @@ HudUpdate:
     ld b, 3
     jp QueueDigits
 .notCombo:
-    bit 2, a
-    jr z, .notHits
-    res 2, a
-    ld [wHudDirty], a
-    ld hl, wHitsDigits
-    ld de, HUD_ROW2 + 4
-    ld b, 3
-    jp QueueDigits
-.notHits:
-    bit 3, a
-    ret z
-    res 3, a
-    ld [wHudDirty], a
-    ld hl, wMissDigits
-    ld de, HUD_ROW2 + 15
-    ld b, 3
-    jp QueueDigits
+    ret
+
 ; Encola B dígitos (decimales, de HL) como caracteres en la dirección DE de VRAM
 QueueDigits:
     ld a, l
