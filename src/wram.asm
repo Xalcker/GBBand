@@ -35,6 +35,13 @@ wNoteOnCnt:: ds $28
 SECTION "WRAM variables", WRAM0[$C900]
 wState::        ds 1
 wDifficulty::   ds 1     ; 0 facil, 1 medio, 2 dificil, 3 experto
+wSong::         ds 1     ; canción elegida (lugar en la lista)
+wInstrument::   ds 1     ; 0 guitarra, 1 teclado, 2 bajo, 3 bateria
+wMenuRow::      ds 1     ; renglón del menú: 0 canción, 1 instrumento, 2 dificultad
+wSongBank::     ds 1     ; banco A de la canción elegida
+wInstrMask::    ds 1     ; instrumentos con chart en esa canción
+wTitleBuf::     ds SONG_TITLE_LEN
+wGameBuf::      ds SONG_GAME_LEN
 wPlaying::      ds 1     ; 1 mientras suena la canción (la ISR corre el audio y cuenta cuadros)
 wT::            ds 2     ; cuadro de la canción: ISRs de VBlank desde el inicio (la ISR lo incrementa al final)
 wTJ::           ds 2     ; cuadro con el que se juzga (wT - 1)
@@ -85,6 +92,8 @@ wNV::           ds 1     ; desplazamiento / 2
 wPLane::        ds 1
 wPBase::        ds 1
 wQDest::        ds 2
+wRowHas::       ds 1     ; la fila que se arma tiene gemas
+wRowFlags::     ds 32    ; por fila del fondo: 1 si en VRAM tiene gemas (si no, armar una fila vacía no escribe nada)
 wRowTiles::     ds 10
 wRowAttr::      ds 10
 

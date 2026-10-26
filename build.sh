@@ -5,7 +5,8 @@
 # --release arma la ROM para publicar en build/release/gbband-v<versión>.gb con su suma de verificación
 #   (.sha256) y la licencia. La versión sale del archivo VERSION si no se indica.
 # NOMBRE=prueba ./build.sh deja build/gbband-prueba.gb sin pisar build/gbband.gb.
-# SOLO="patron1,patron2" queda reservado para compilar un subconjunto de canciones (fase 3); por ahora no hace nada.
+# SOLO="patron1,patron2" compila solo las canciones que coincidan (por ejemplo SOLO="tormenta,luna" ./build.sh).
+# Con --release solo entran las canciones que git versiona (las originales).
 # COLOCACION=A ./build.sh elige la colocacion A de las gemas (B por omision: 4 desplazamientos verticales).
 # (Mismas opciones que build.ps1: -Release, -Version, -Nombre, -Solo.)
 set -euo pipefail
@@ -28,7 +29,6 @@ if [ $release -eq 1 ] && [ -z "$version" ]; then version="$(head -n 1 "$root/VER
 buscar() { if [ -x "$root/tools/rgbds/$1" ]; then echo "$root/tools/rgbds/$1"; else echo "$1"; fi; }
 rgbasm="$(buscar rgbasm)"; rgblink="$(buscar rgblink)"; rgbfix="$(buscar rgbfix)"
 
-[ -n "${SOLO:-}" ] && echo "SOLO aun no hace nada (no hay lista de canciones)"
 
 if [ $release -eq 1 ]; then out="$root/build/release"; else out="$root/build"; fi
 mkdir -p "$out"
@@ -36,6 +36,12 @@ if [ $release -eq 1 ]; then base="gbband-v$version"; elif [ -n "$nombre" ]; then
 
 # Graficos: src/chr/*.tiles -> build/chr/*.2bpp (y PNG de contacto para revisarlos)
 uv run --project "$root" gbband build-gfx > /dev/null
+
+# Lista de canciones de la ROM (build/list.asm)
+list_args=(list-songs --quiet)
+[ $release -eq 1 ] && list_args+=(--release)
+if [ -n "${SOLO:-}" ]; then list_args+=(--solo); IFS=", " read -r -a solo_patterns <<< "$SOLO"; list_args+=("${solo_patterns[@]}"); fi
+uv run --project "$root" gbband "${list_args[@]}"
 
 obj="$out/$base.o"
 opciones=(); [ "${COLOCACION:-B}" = "A" ] && opciones=(-D PLACEMENT_B=0)

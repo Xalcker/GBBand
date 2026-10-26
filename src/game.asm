@@ -5,17 +5,31 @@
 SECTION "Game", ROM0
 
 TxtTitle:    db "GBBAND", 0
-TxtChoose:   db "ELIGE DIFICULTAD", 0
+TxtSong:     db " CANCION", 0
+TxtInstr:    db " INSTRUMENTO", 0
+TxtDiff:     db " DIFICULTAD", 0
 TxtPress:    db "PRESIONA START", 0
 TxtEnd:      db "FIN DE LA CANCION", 0
 TxtHits:     db "ACIERTOS"
 TxtMiss:     db "FALLOS"
-; 14 caracteres cada una, con relleno a 16 para indexar con (dificultad << 4)
+; 14 caracteres cada una, con relleno a 16 para indexar con (valor << 4)
 DiffText:
     db "<   FACIL    >", 0, 0
     db "<   MEDIO    >", 0, 0
     db "<  DIFICIL   >", 0, 0
     db "<  EXPERTO   >", 0, 0
+InstrText:
+    db "<  GUITARRA  >", 0, 0
+    db "<  TECLADO   >", 0, 0
+    db "<    BAJO    >", 0, 0
+    db "<  BATERIA   >", 0, 0
+; NR51 con el CH1, CH2, CH3 o CH4 fuera de ambos lados: lo que se oye cuando el instrumento falla
+InstrNr51Muted: db $EE, $DD, $BB, $77
+
+DEF MENU_ROW_SONG  EQU 5        ; fila de pantalla de cada renglón del menú
+DEF MENU_ROW_INSTR EQU 10
+DEF MENU_ROW_DIFF  EQU 14
+CursorRows: db MENU_ROW_SONG, MENU_ROW_INSTR, MENU_ROW_DIFF
 
 ; Apaga el LCD (solo en VBlank, o dañaría una DMG). Si ya estaba apagado no hace nada.
 LcdOff:
@@ -31,6 +45,7 @@ LcdOff:
     ret
 
 ; ---- Menú -------------------------------------------------------------------------------------
+; Tres renglones: canción, instrumento y dificultad. ↑/↓ cambia de renglón, ←/→ el valor, Start empieza.
 EnterMenu:
     call LcdOff
     call ClearMaps
@@ -48,13 +63,19 @@ EnterMenu:
     jr nz, .clearOam
     inc a
     ld [wOamDirty], a
-    ld de, _SCRN0 + 32 * 4 + 7
+    ld de, _SCRN0 + 32 * 2 + 7
     ld hl, TxtTitle
     call PrintStr
-    ld de, _SCRN0 + 32 * 7 + 2
-    ld hl, TxtChoose
+    ld de, _SCRN0 + 32 * MENU_ROW_SONG + 1
+    ld hl, TxtSong
     call PrintStr
-    ld de, _SCRN0 + 32 * 14 + 3
+    ld de, _SCRN0 + 32 * MENU_ROW_INSTR + 1
+    ld hl, TxtInstr
+    call PrintStr
+    ld de, _SCRN0 + 32 * MENU_ROW_DIFF + 1
+    ld hl, TxtDiff
+    call PrintStr
+    ld de, _SCRN0 + 32 * 17 + 3
     ld hl, TxtPress
     call PrintStr
     ld a, LCDCF_ON | LCDCF_BG8000 | LCDCF_BGON
@@ -62,35 +83,138 @@ EnterMenu:
     ldh [rLCDC], a
     ld a, STATE_MENU
     ld [wState], a
-    jr QueueDifficulty
+    call MenuLoadSong
+    call QueueSongText
+    call QueueInstrument
+    call QueueDifficulty
+    jp QueueCursor
 
-; Escribe el texto de la dificultad elegida (por la cola de VRAM)
+; Elige el banco de la canción (wSong), lee su ficha (instrumentos, título y juego) y deja un instrumento válido.
+MenuLoadSong:
+    ld a, [wSong]
+    ld e, a
+    ld d, 0
+    ld hl, SongTable
+    add hl, de
+    ld a, [hl]
+    ld [wSongBank], a
+    call SwitchBank
+    ld a, [$4000 + SONG_INSTR]
+    ld [wInstrMask], a
+    ld hl, wTitleBuf
+    ld de, $4000 + SONG_TITLE
+    ld bc, SONG_TITLE_LEN + SONG_GAME_LEN       ; el juego va justo después del título en la ficha
+    call CopyMem
+    ld a, [wInstrument]
+    call InstrAvailable
+    ret c
+    xor a
+.find:
+    ld [wInstrument], a
+    push af
+    call InstrAvailable
+    pop bc
+    ret c
+    ld a, b
+    inc a
+    and 3
+    jr .find
+
+; A = instrumento. Carry = 1 si la canción elegida tiene su chart.
+InstrAvailable:
+    ld c, a
+    ld a, [wInstrMask]
+    inc c
+.shift:
+    srl a
+    dec c
+    jr nz, .shift
+    ret
+
+; DE = dirección en el mapa $9800 de la fila de pantalla C, columna E (el menú no tiene scroll)
+MenuDest:
+    push de
+    ld a, c
+    call RowDest            ; HL = $9800 + fila * 32 + 5
+    pop de
+    ld d, 0
+    add hl, de
+    ld de, -5
+    add hl, de
+    ld d, h
+    ld e, l
+    ret
+
+; HL = origen, B = bytes, C = fila de pantalla, E = columna
+QueueMenuAt:
+    push hl
+    call MenuDest
+    pop hl
+    jp QueueRaw
+
+QueueSongText:
+    ld c, MENU_ROW_SONG + 1
+    ld e, 0
+    ld hl, wTitleBuf
+    ld b, SONG_TITLE_LEN
+    call QueueMenuAt
+    ld c, MENU_ROW_SONG + 2
+    ld e, 2
+    ld hl, wGameBuf
+    ld b, SONG_GAME_LEN
+    jr QueueMenuAt
+
+QueueInstrument:
+    ld a, [wInstrument]
+    swap a
+    ld e, a
+    ld d, 0
+    ld hl, InstrText
+    add hl, de
+    ld c, MENU_ROW_INSTR + 1
+    ld e, 3
+    ld b, 14
+    jr QueueMenuAt
+
 QueueDifficulty:
     ld a, [wDifficulty]
-    swap a                  ; * 16
+    swap a
     ld e, a
     ld d, 0
     ld hl, DiffText
     add hl, de
-    ld a, l
-    ld [wQSrc], a
-    ld a, h
-    ld [wQSrc + 1], a
-    ld de, _SCRN0 + 32 * 10 + 3
+    ld c, MENU_ROW_DIFF + 1
+    ld e, 3
     ld b, 14
-    ld c, 0
-    call VQAlloc
-    ld a, [wQSrc]
-    ld e, a
-    ld a, [wQSrc + 1]
-    ld d, a
-    ld b, 14
-.copy:
-    ld a, [de]
-    inc de
-    ld [hl+], a
-    dec b
-    jr nz, .copy
+    jr QueueMenuAt
+
+; El cursor ">" de los tres renglones (solo el elegido lo lleva)
+QueueCursor:
+    ld b, 0
+.row:
+    push bc
+    ld hl, CursorRows
+    ld e, b
+    ld d, 0
+    add hl, de
+    ld c, [hl]
+    ld a, [wMenuRow]
+    cp b
+    ld a, ' '
+    jr nz, .put
+    ld a, '>'
+.put:
+    ld [wQDigit], a
+    ld e, 0
+    call MenuDest
+    ld hl, wQDigit
+    ld b, 1
+    call QueueRaw
+    pop bc
+    inc b
+    ld a, b
+    cp 3
+    jr nz, .row
     ret
 
 MenuFrame:
@@ -102,23 +226,72 @@ MenuFrame:
     ei
     bit PADB_START, b
     jp nz, StartSong
-    ld a, [wDifficulty]
-    bit PADB_RIGHT, b
-    jr z, .notRight
-    cp 3
-    jr nc, .notRight
+    bit PADB_DOWN, b
+    jr z, .notDown
+    ld a, [wMenuRow]
+    cp 2
+    ret nc
     inc a
-    ld [wDifficulty], a
-    jr QueueDifficulty
-.notRight:
-    bit PADB_LEFT, b
-    ret z
+    ld [wMenuRow], a
+    jp QueueCursor
+.notDown:
+    bit PADB_UP, b
+    jr z, .notUp
+    ld a, [wMenuRow]
     and a
     ret z
     dec a
+    ld [wMenuRow], a
+    jp QueueCursor
+.notUp:
+    ld c, 1                 ; C = +1 (derecha) o -1 (izquierda)
+    bit PADB_RIGHT, b
+    jr nz, .change
+    ld c, $FF
+    bit PADB_LEFT, b
+    ret z
+.change:
+    ld a, [wMenuRow]
+    and a
+    jr z, .song
+    dec a
+    jr z, .instrument
+    ld a, [wDifficulty]
+    add c
+    cp 4
+    ret nc                  ; (también atrapa el -1 desde 0, que da $FF)
     ld [wDifficulty], a
-    jr QueueDifficulty
-
+    jp QueueDifficulty
+.instrument:
+    ld b, 4
+.try:
+    ld a, [wInstrument]
+    add c
+    and 3
+    ld [wInstrument], a
+    push bc
+    call InstrAvailable
+    pop bc
+    jr c, .instrumentOk
+    dec b
+    jr nz, .try
+.instrumentOk:
+    jp QueueInstrument
+.song:
+    ld a, [wSong]
+    add c
+    cp $FF
+    jr nz, .notNegative
+    ld a, NUM_SONGS - 1
+.notNegative:
+    cp NUM_SONGS
+    jr c, .songOk
+    xor a
+.songOk:
+    ld [wSong], a
+    call MenuLoadSong
+    call QueueSongText
+    jp QueueInstrument
 ; ---- Partida ------------------------------------------------------------------------------------
 StartSong:
     call LcdOff
@@ -151,7 +324,7 @@ StartSong:
     ld [wVQueue], a
     ldh [hPadNew], a
 
-    ld a, SONG0_BANK
+    ld a, [wSongBank]
     call SwitchBank
     ld a, [$4000 + SONG_LEADIN]
     ld [wLeadIn], a
@@ -185,7 +358,7 @@ StartSong:
 PlayFrame:
     ldh a, [rLY]
     ldh [hPassLY], a
-    ld a, SONG0_BANK
+    ld a, [wSongBank]
     call SwitchBank
     call JudgeFrame
     call HighwayStep
@@ -195,7 +368,12 @@ PlayFrame:
     and a
     ld a, $FF
     jr z, .notMuted
-    ld a, $EE               ; CH1 (el instrumento) fuera de ambos lados: bits 0 y 4 de NR51
+    ld a, [wInstrument]     ; el canal del instrumento fuera de ambos lados de NR51
+    ld e, a
+    ld d, 0
+    ld hl, InstrNr51Muted
+    add hl, de
+    ld a, [hl]
 .notMuted:
     ld [wNr51Out], a
     call FillAudioRing

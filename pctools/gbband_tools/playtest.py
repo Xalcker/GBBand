@@ -25,7 +25,7 @@ from . import layout
 from .runner import Runner
 
 ROOT = Path(__file__).resolve().parents[2]
-SONG_DIR = ROOT / "src" / "songs" / "demo"
+SONGS_DIR = ROOT / "src" / "songs"
 # Carriles: verde = izquierda, rojo = abajo, amarillo = derecha, azul = B, naranja = A.
 # Desde un hook los eventos se mandan con retraso 1: `button_press` agregaría el evento a una lista que PyBoy
 # vacía al final del tick (se perdería). Con retraso 1 lo lee la ISR de VBlank siguiente a la del hook.
@@ -35,11 +35,74 @@ RELEASE = (WindowEvent.RELEASE_ARROW_LEFT, WindowEvent.RELEASE_ARROW_DOWN, Windo
            WindowEvent.RELEASE_BUTTON_B, WindowEvent.RELEASE_BUTTON_A)
 HOLD_FRAMES = 3
 STATE_END = 2
+INSTRUMENTS = ("guitarra", "teclado", "bajo", "bateria")  # canal del APU de cada uno: CH1, CH2, CH3, CH4
+LANE_MASK = 0x1F
 
 
-def song_info() -> dict:
-    return json.loads((SONG_DIR / "notes.json").read_text(encoding="utf-8"))
+def song_names() -> list[str]:
+    """Las canciones de la ROM, en el orden de su lista (alfabético, como `gbband list-songs`)."""
+    return sorted(p.parent.name for p in SONGS_DIR.glob("*/song.asm"))
 
+
+@dataclass
+class SongData:
+    """Lo que las pruebas saben de una canción, leído de los archivos que generó el importador."""
+
+    name: str
+    info: dict
+    charts: dict  # (instrumento, dificultad) -> [(cuadro, máscara de carriles)], sin las entradas de fin de cola
+    note_on: dict  # canal 0-3 -> cuadros de la canción (con el lead-in) en que el stream dispara una nota
+
+    def chart(self, instrument: str, difficulty: str) -> list[tuple[int, int]]:
+        return self.charts[(instrument, difficulty)]
+
+
+def load_song(name: str) -> SongData:
+    from . import audio_gb as gb
+    from .chartedit import entries_to_chart, parse_chart_bytes
+
+    folder = SONGS_DIR / name
+    info = json.loads((folder / "info.json").read_text(encoding="utf-8"))
+    charts = {}
+    for path in folder.glob("chart_*.bin"):
+        _, instrument, difficulty = path.stem.split("_")
+        notes = entries_to_chart(parse_chart_bytes(path.read_bytes()), instrument == "bateria")
+        charts[(instrument, difficulty)] = [(n.frame, n.mask & LANE_MASK) for n in notes]
+    stream = (folder / "stream_b.bin").read_bytes() + (folder / "stream_c.bin").read_bytes()
+    on = gb.note_on_frames(gb.decode_stream(stream))
+    return SongData(name, info, charts, {ch: [info["lead_in"] + f for f in frames] for ch, frames in on.items()})
+
+
+def select_in_menu(r: Runner, song: int, instrument: int, difficulty: int) -> None:
+    """Elige la canción, el instrumento y la dificultad con los botones, como un jugador (y comprueba lo elegido)."""
+    wait = lambda: r.tick(3)
+
+    def tap(button: str) -> None:
+        r.pb.button_press(button)
+        r.tick(2)
+        r.pb.button_release(button)
+        r.tick(2)
+
+    value = lambda name: r.read(name)[0]
+    for _ in range(40):
+        if value("wSong") == song:
+            break
+        tap("right")
+    assert value("wSong") == song, "no pude elegir la canción en el menú"
+    tap("down")
+    for _ in range(5):
+        if value("wInstrument") == instrument:
+            break
+        tap("right")
+    assert value("wInstrument") == instrument, "esa canción no tiene ese instrumento"
+    tap("down")
+    for _ in range(8):
+        d = value("wDifficulty")
+        if d == difficulty:
+            break
+        tap("right" if d < difficulty else "left")
+    assert value("wDifficulty") == difficulty
+    wait()
 
 def expected_score(total_notes: int) -> int:
     """Puntaje de acertar `total_notes` notas seguidas: la nota i vale 50 por su multiplicador
@@ -170,6 +233,8 @@ class Result:
     mode: str
     difficulty: str
     bot: str
+    song: str = ""
+    instrument: str = ""
     total_notes: int = 0
     frames: int = 0
     values: dict = field(default_factory=dict)
@@ -208,15 +273,17 @@ def sprites_per_line(oam: bytes) -> int:
     return max(lines)
 
 
-def run_case(rom: Path, mode: str, difficulty: str, bot_name: str, out: Path, visual: bool = False,
-             shots: tuple[int, ...] = (40, 400, 1200), seed: int = 1) -> Result:
-    info = song_info()
-    chart = [(f, m) for f, m in info["charts"][difficulty]]
+def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, bot_name: str, out: Path,
+             visual: bool = False, shots: tuple[int, ...] = (40, 400, 1200), seed: int = 1) -> Result:
+    data = load_song(song)
+    info = data.info
+    chart = data.chart(instrument, difficulty)
+    channel = INSTRUMENTS.index(instrument)
     s = layout.speed_8_8(difficulty)
     bot = BOTS[bot_name](chart, seed)
-    result = Result(str(rom.name), mode, difficulty, bot_name, total_notes=sum(len(lanes_of(m)) for _, m in chart))
+    result = Result(str(rom.name), mode, difficulty, bot_name, song, instrument,
+                    total_notes=sum(len(lanes_of(m)) for _, m in chart))
     lead_in = info["lead_in"]
-    expected_note_on = {lead_in + f for f in info["melody_audio_frames"]}
     observed_note_on: dict[int, list[int]] = {0: [], 1: [], 2: [], 3: []}
     errors: list[float] = []
     isr_hist: dict[int, int] = {}
@@ -225,7 +292,8 @@ def run_case(rom: Path, mode: str, difficulty: str, bot_name: str, out: Path, vi
     with Runner(rom, mode, rom.with_suffix(".sym")) as r:
         r.boot()
         r.tick(5)
-        r.pb.memory[r.symbols["wDifficulty"]] = layout.DIFFICULTIES.index(difficulty)
+        select_in_menu(r, song_names().index(song), channel, layout.DIFFICULTIES.index(difficulty))
+        assert bytes(r.read("wTitleBuf", 20)).decode("ascii").strip() == info["title"], "el menú no muestra el título de la canción"
         r.pb.button_press("start")
         r.tick(2)
         r.pb.button_release("start")
@@ -238,7 +306,7 @@ def run_case(rom: Path, mode: str, difficulty: str, bot_name: str, out: Path, vi
 
         releases: dict[int, int] = {}  # carril -> cuadro en que se suelta
         held: set[int] = set()
-        state = {"prev_on": note_on_counts(r), "last_t": None}
+        state = {"prev_on": note_on_counts(r)}
 
         def on_isr_end(_ctx) -> None:
             """Corre al final de cada ISR de VBlank: el estado es el de un cuadro completo. `wT` ya cuenta el
@@ -315,24 +383,25 @@ def run_case(rom: Path, mode: str, difficulty: str, bot_name: str, out: Path, vi
         result.visual_bias = sum(errors) / len(errors)
         result.visual_samples = len(errors)
         result.visual_values = errors
-    result.values["expected_note_on"] = sorted(expected_note_on)
-    write_report(result, out, chart, expected_note_on)
+    write_report(result, out)
     return result
 
-def sync_errors(result: Result, chart: list[tuple[int, int]], lead_in: int) -> list[str]:
-    """Notas del chart que no caen en el mismo cuadro que el alta de nota del CH1."""
-    on = set(result.note_on[0])
-    return [f"nota del cuadro {f} sin alta de CH1 en ese cuadro" for f, _ in chart if f not in on]
+def sync_errors(result: Result, chart: list[tuple[int, int]]) -> list[str]:
+    """Notas del chart que no caen en el mismo cuadro que el alta de nota del canal de su instrumento."""
+    channel = INSTRUMENTS.index(result.instrument)
+    on = set(result.note_on[channel])
+    return [f"nota del cuadro {f} sin alta de CH{channel + 1} en ese cuadro" for f, _ in chart if f not in on]
 
 
-def write_report(result: Result, out: Path, chart, expected_note_on) -> None:
+def write_report(result: Result, out: Path) -> None:
     v = result.values
     cpu_max_m = v["cpu_max_lines"] * 114
     cpu_mean_m = v["cpu_mean_lines"] * 114
+    pct, star_count = stars(v["score"], result.total_notes)
     lines = [
-        f"rom={result.rom} modo={result.mode} dificultad={result.difficulty} bot={result.bot}",
+        f"cancion={result.song} instrumento={result.instrument} rom={result.rom} modo={result.mode} dificultad={result.difficulty} bot={result.bot}",
         f"cuadros={result.frames} notas_chart={result.total_notes}",
-        f"puntaje={v['score']} puntaje_esperado_perfecto={expected_score(result.total_notes)} porcentaje={stars(v['score'], result.total_notes)[0]:.1f} estrellas={stars(v['score'], result.total_notes)[1]}",
+        f"puntaje={v['score']} puntaje_esperado_perfecto={expected_score(result.total_notes)} porcentaje={pct:.1f} estrellas={star_count}",
         f"aciertos={v['hits']} fallos={v['misses']} golpes_al_aire={v['air']} combo_max={v['max_combo']}",
         f"atrasos={v['late']} underruns_audio={v['underrun']} desbordes_cola_vram={v['vq_overflow']}",
         "",

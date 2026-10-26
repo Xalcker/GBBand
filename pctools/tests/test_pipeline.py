@@ -8,10 +8,10 @@ from pathlib import Path
 import pytest
 
 from gbband_tools import audio_gb as gb
-from gbband_tools import chartgen, layout
+from gbband_tools import chart as charts, layout, playtest
 
 ROOT = Path(__file__).resolve().parents[2]
-SONG = ROOT / "src" / "songs" / "demo"
+SONGS = playtest.song_names()
 
 
 # ---- pitch y formas de onda ----------------------------------------------------------------------
@@ -122,46 +122,77 @@ def test_separacion_minima_del_mismo_carril():
 
 
 def test_chart_ida_y_vuelta():
-    chart = [(10, 1), (300, 0b10100), (301, 8), (900, 2)]
-    data = chartgen.chart_bytes(chart)
+    chart = [charts.ChartNote(10, 1), charts.ChartNote(300, 0b10100), charts.ChartNote(301, 8), charts.ChartNote(900, 2)]
+    data = charts.chart_bytes(chart)
     assert data[-2:] == bytes([0, 0xFF])
-    assert chartgen.parse_chart(data) == chart
+    assert [mask for _, mask in charts.parse_chart(data)] == [1, 0b10100, 8, 2]
     assert max(data[0::2]) <= 255  # deltas de un byte (con rellenos de 255 cuando hace falta)
 
 
 def test_check_playable():
-    chartgen.check_playable([(5, 0b00011), (9, 0b11000)])
+    charts.check_playable([charts.ChartNote(5, 0b00011), charts.ChartNote(9, 0b11000)])
     with pytest.raises(ValueError):
-        chartgen.check_playable([(5, 0b00101)])  # verde + amarillo
+        charts.check_playable([charts.ChartNote(5, 0b00101)])  # verde + amarillo
     with pytest.raises(ValueError):
-        chartgen.check_playable([(5, 0b10100)])  # amarillo + naranja
+        charts.check_playable([charts.ChartNote(5, 0b10100)])  # amarillo + naranja
 
 
-# ---- la canción de prueba ------------------------------------------------------------------------------
+def test_separacion_de_carriles_mueve_o_quita():
+    from gbband_tools.ir import Note
 
-def test_cancion_demo_coherente():
-    info = json.loads((SONG / "notes.json").read_text(encoding="utf-8"))
+    experto = next(d for d in charts.DIFFICULTIES if d.name == "experto")
+    notes = [Note(1000 + 4 * i, 60, 2) for i in range(4)]
+    stats: dict = {}
+    out_notes, masks = charts.enforce_lane_gap(notes, [1, 1, 1, 1], experto, move=True, stats=stats)
+    assert layout.conflicts([(n.frame, m) for n, m in zip(out_notes, masks)], layout.speed_8_8("experto"), "B") == 0
+    assert stats["moved"] >= 1
+    kept, masks = charts.enforce_lane_gap(notes, [1, 1, 1, 1], experto, move=False, stats={})
+    assert [n.frame for n in kept] == [1000, 1012]  # sin mover, solo quedan las que respetan los 12 cuadros del experto
+
+
+# ---- las canciones importadas ---------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("song", SONGS)
+def test_cancion_coherente(song):
+    data = playtest.load_song(song)
+    info = data.info
     assert info["lead_in"] >= 160  # las notas ya están cayendo cuando empieza el audio (anticipación fácil: 156 cuadros)
-    for diff in layout.DIFFICULTIES:
-        chart = [tuple(n) for n in info["charts"][diff]]
-        assert chart
-        chartgen.check_playable(chart)
-        chartgen.check_layout(chart, diff)
-        on_ch1 = {info["lead_in"] + f for f in info["melody_audio_frames"]}
-        assert all(f in on_ch1 for f, _ in chart), "toda nota del chart debe salir de una nota de la melodía"
-        # el chart de la ROM es el mismo que el de notes.json
-        data = (SONG / f"chart_guitarra_{diff}.bin").read_bytes()
-        assert chartgen.parse_chart(data) == chart
-    # el stream decodificado tiene las altas de nota que dice el generador
-    stream = (SONG / "stream_b.bin").read_bytes() + (SONG / "stream_c.bin").read_bytes()
-    decoded = gb.decode_stream(stream)  # (stream_c.bin trae un byte de relleno si el stream cabe en el banco B)
-    ons = gb.note_on_frames(decoded)
-    assert [len(ons[c]) for c in range(4)] == [len(info["note_on_audio_frames"][str(c)]) for c in range(4)]
-    assert len(decoded) == info["audio_frames"] + 1
-    assert decoded[-1].end
+    assert info["stream_bytes"] <= 2 * 16384 and info["bank_a_bytes"] <= 16384
+    assert len(info["title"]) <= 20 and len(info["game"]) <= 16
+    mask = info["instrument_mask"]
+    for index, instrument in enumerate(playtest.INSTRUMENTS):
+        for difficulty in layout.DIFFICULTIES:
+            present = (instrument, difficulty) in data.charts
+            assert present == bool(mask >> index & 1), f"{instrument}/{difficulty}"
+            if not present:
+                continue
+            chart = data.chart(instrument, difficulty)
+            assert chart, f"chart vacío: {instrument}/{difficulty}"
+            frames = [f for f, _ in chart]
+            assert frames == sorted(frames) and len(set(frames)) == len(frames)
+            assert frames[0] >= info["lead_in"] and frames[-1] < info["end_frame"]
+            blocked = ({0, 2},) if instrument == "bateria" else ({0, 2}, {2, 4})
+            for frame, lane_mask in chart:
+                lanes = {b for b in range(5) if lane_mask >> b & 1}
+                assert not any({x, y} in blocked for x in lanes for y in lanes), f"acorde imposible en {frame}"
+                assert max(lanes) < {"facil": 3, "medio": 4}.get(difficulty, 5) or instrument == "bateria"
+            assert layout.conflicts(chart, layout.speed_8_8(difficulty), "B") == 0, "gemas del mismo carril que se pisan"
+    # cada nota del chart de un instrumento tiene su alta de nota en el canal del instrumento, en el mismo cuadro
+    for index, instrument in enumerate(playtest.INSTRUMENTS):
+        for difficulty in layout.DIFFICULTIES:
+            if (instrument, difficulty) in data.charts:
+                on = set(data.note_on[index])
+                missing = [f for f, _ in data.chart(instrument, difficulty) if f not in on]
+                assert not missing, f"{instrument}/{difficulty}: notas sin alta de nota en CH{index + 1}: {missing[:5]}"
 
 
 def test_dificultades_mas_ralas_hacia_facil():
-    info = json.loads((SONG / "notes.json").read_text(encoding="utf-8"))
-    sizes = [len(info["charts"][d]) for d in layout.DIFFICULTIES]
-    assert sizes == sorted(sizes)
+    data = playtest.load_song(SONGS[0])
+    for instrument in playtest.INSTRUMENTS:
+        sizes = [len(data.charts[(instrument, d)]) for d in layout.DIFFICULTIES if (instrument, d) in data.charts]
+        assert sizes == sorted(sizes), instrument
+
+
+def test_las_diez_canciones_originales():
+    assert len(SONGS) >= 10
+    assert {"demo", "tormenta", "luna", "salto", "marcha", "noche", "carrera", "brisa", "cumbia", "amanecer"} <= set(SONGS)

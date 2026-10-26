@@ -6,7 +6,8 @@
 #   solo entrarán las que git versiona: la música de juegos comerciales no se distribuye.)
 # -Nombre prueba deja build\gbband-prueba.gb sin pisar build\gbband.gb.
 # -Colocacion A|B elige como se colocan las gemas (B por omision: 4 desplazamientos verticales; A: una fila de tiles).
-# -Solo <patrón>[,<patrón>] queda reservado para compilar un subconjunto de canciones (fase 3); por ahora no hace nada.
+# -Solo <patrón>[,<patrón>] compila solo las canciones que coincidan (por ejemplo -Solo tormenta,luna o -Solo c*).
+# Con -Release solo entran las canciones que git versiona (las originales): las importadas de juegos comerciales no se distribuyen.
 param([switch]$Release, [string]$Version = '', [string]$Nombre = '', [string[]]$Solo = @(), [ValidateSet('A','B')][string]$Colocacion = 'B')
 $ErrorActionPreference = 'Continue'   # (los avisos de rgbasm van a stderr: se revisa $LASTEXITCODE)
 $root = $PSScriptRoot
@@ -25,7 +26,6 @@ $rgbasm = Buscar-Rgbds 'rgbasm'
 $rgblink = Buscar-Rgbds 'rgblink'
 $rgbfix = Buscar-Rgbds 'rgbfix'
 
-if ($Solo.Count -gt 0) { Write-Host '-Solo aun no hace nada (no hay lista de canciones)' -ForegroundColor Yellow }
 
 $out = if ($Release) { Join-Path $root 'build/release' } else { Join-Path $root 'build' }
 New-Item -ItemType Directory -Force $out | Out-Null
@@ -34,6 +34,13 @@ $base = if ($Release) { "gbband-v$Version" } elseif ($Nombre) { "gbband-$Nombre"
 # Gráficos: src/chr/*.tiles -> build/chr/*.2bpp (y PNG de contacto para revisarlos)
 & uv run --project $root gbband build-gfx | Out-Null
 if ($LASTEXITCODE -ne 0) { Write-Host 'Error al convertir los graficos' -ForegroundColor Red; exit 1 }
+
+# Lista de canciones de la ROM (build/list.asm)
+$listArgs = @('list-songs', '--quiet')
+if ($Release) { $listArgs += '--release' }
+if ($Solo.Count -gt 0) { $listArgs += '--solo'; $listArgs += $Solo }
+& uv run --project $root gbband @listArgs
+if ($LASTEXITCODE -ne 0) { Write-Host 'Error al armar la lista de canciones' -ForegroundColor Red; exit 1 }
 
 $obj = "$out/$base.o"
 $opciones = @(); if ($Colocacion -eq 'A') { $opciones += '-D', 'PLACEMENT_B=0' }

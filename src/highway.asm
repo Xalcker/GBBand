@@ -53,13 +53,25 @@ HighwayInit:
     ld [wBFs], a
     ld [wBFs + 1], a
     ld [wBFs + 2], a
+    ld hl, wRowFlags
+    ld b, 32
+    xor a
+.clearFlags:
+    ld [hl+], a
+    dec b
+    jr nz, .clearFlags
     ld a, 17                ; la primera fila que se arma es la 17 (debajo de la línea de golpe)
     ld [wBuildQ], a
     xor a
     ld [wBuildQ + 1], a
 
     ; puntero al chart (instrumento 0 = guitarra) de la dificultad elegida
+    ld a, [wInstrument]     ; puntero al chart: SONG_CHARTS + 2 * (instrumento * 4 + dificultad)
+    add a
+    add a
+    ld b, a
     ld a, [wDifficulty]
+    add b
     add a
     add SONG_CHARTS
     ld l, a
@@ -128,6 +140,10 @@ FetchNote:
     ld a, [hl+]
     cp $FF
     jr z, .end
+    bit 7, a
+    jr z, .notRelease
+    xor a                   ; fin de una cola ($80): las colas todavía no se dibujan, se ignora
+.notRelease:
     and $1F
     ld [wNMask], a
     ld a, l
@@ -219,6 +235,8 @@ MulDelta:
 
 ; ---- Armar una fila ----------------------------------------------------------------------------
 BuildRow:
+    xor a
+    ld [wRowHas], a
     ; fondo por defecto: carril vacío, atributos de la paleta 0
     ld hl, wRowTiles
     ld b, NUM_LANES
@@ -253,7 +271,26 @@ BuildRow:
     call FetchNote
     jr .notes
 .emit:
+    ; Una fila vacía solo se escribe si la vuelta anterior dejó gemas en esa fila del fondo (ya tiene los carriles vacíos)
+    ld a, [wBuildQ]
+    and 31
+    ld e, a
+    ld d, 0
+    ld hl, wRowFlags
+    add hl, de
+    ld a, [wRowHas]
+    or [hl]
+    jr z, .rowDone
     call QueueRow
+    ld a, [wBuildQ]
+    and 31
+    ld e, a
+    ld d, 0
+    ld hl, wRowFlags
+    add hl, de
+    ld a, [wRowHas]
+    ld [hl], a
+.rowDone:
     ld hl, wBuildQ
     ld a, [hl]
     sub 1
@@ -282,6 +319,8 @@ PlaceNote:
 ; B = carril. Conserva BC.
 PlaceLane:
     push bc
+    ld a, 1
+    ld [wRowHas], a
     ld a, b
     ld [wPLane], a
     ld e, b
@@ -381,6 +420,14 @@ QueueRow:
 
 ; La parte de abajo de la gema de wPLane cae en la fila siguiente (q+1), que ya está armada: se parchea.
 QueuePatch:
+    ld a, [wBuildQ]         ; la fila de abajo ahora tiene gemas en VRAM
+    inc a
+    and 31
+    ld e, a
+    ld d, 0
+    ld hl, wRowFlags
+    add hl, de
+    ld [hl], 1
     ld a, [wBuildQ]
     inc a
     call RowDest

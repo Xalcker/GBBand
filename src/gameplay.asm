@@ -70,6 +70,8 @@ JudgeFeed:
     ld hl, wJFrame + 1
     inc [hl]
 .noCarry:
+    bit 7, c
+    jr nz, .loop            ; fin de una cola ($80): todavía no se juegan las colas
     ld a, c
     and $1F
     jr z, .loop             ; entrada de relleno

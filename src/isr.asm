@@ -2,8 +2,8 @@
 ; isr.asm - Interrupción de VBlank, cola de VRAM y lectura del control
 ;
 ; Reglas: main_loop calcula y deja datos en buffers; la ISR solo copia. La ISR NUNCA cambia de banco de ROM
-; (todo lo que lee es WRAM o código de ROM0). Orden fijo: audio, OAM DMA, cola de VRAM, scroll y LCDC,
-; control, contador de cuadros.
+; (todo lo que lee es WRAM o código de ROM0). Orden fijo: OAM, cola de VRAM, scroll y LCDC, audio, control, contador
+; de cuadros. (El audio va después de lo que debe caber en el VBlank: ver docs/decisiones.md.)
 ; =============================================================================
 
 SECTION "VBlank ISR", ROM0
@@ -20,23 +20,37 @@ VBlankISR:
     and a
     jr nz, .late
 
-    ; 1. audio (primero, para que su jitter sea constante)
-    ld a, [wPlaying]
-    and a
-    call nz, AudioTick
-
-    ; 2. OAM DMA solo si hubo cambios
+    ; 1. OAM: DMA completo (160 M) solo al armar la pantalla; después solo cambian los 5 tiles de los aros
     ld a, [wOamDirty]
     and a
     jr z, .noOam
+    cp 1
+    jr nz, .ringsOnly
+    call hOamDma
+    jr .oamDone
+.ringsOnly:
+    ld hl, wOam + 2
+    ld de, _OAMRAM + 2
+    ld b, NUM_LANES
+.ringTile:
+    ld a, [hl]
+    ld [de], a
+    ld a, l
+    add 4
+    ld l, a
+    ld a, e
+    add 4
+    ld e, a
+    dec b
+    jr nz, .ringTile
+.oamDone:
     xor a
     ld [wOamDirty], a
-    call hOamDma
 .noOam:
-    ; 3. cola de VRAM
+    ; 2. cola de VRAM
     call FlushVQueue
 
-    ; 4. scroll y LCDC
+    ; 3. scroll y LCDC
     ldh a, [hScy]
     ldh [rSCY], a
     ldh a, [hLcdc]
@@ -47,15 +61,21 @@ VBlankISR:
     jr nc, .inVBlank
     ld hl, wOverrun
     inc [hl]
-    jr .common
+    jr .audio
 .inVBlank:
     sub 144
     ld hl, wFlushLines
     cp [hl]
-    jr c, .common
+    jr c, .audio
     ld [hl], a
+.audio:
+    ; 4. audio. Va DESPUÉS de lo que escribe en VRAM/OAM: eso tiene que caber en el VBlank y el audio no (en los
+    ;    cuadros donde entran los cuatro canales a la vez tarda hasta ~400 M). La música se atrasa unas decenas
+    ;    de microsegundos según el tamaño de la cola, imperceptible.
+    ld a, [wPlaying]
+    and a
+    call nz, AudioTick
     jr .common
-
 .late:
     ; main_loop no terminó: no se copia nada a VRAM (podría estar a medias), pero el audio sigue
     ld a, [wLate]

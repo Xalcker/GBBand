@@ -113,6 +113,10 @@ Start:
     ldh [rIF], a
     ld a, 3                     ; dificultad por omisión: experto
     ld [wDifficulty], a
+    xor a
+    ld [wSong], a
+    ld [wInstrument], a
+    ld [wMenuRow], a
     call EnterMenu
     ei
 
@@ -207,8 +211,8 @@ Tiles:
     INCBIN "chr/tiles.2bpp"
 TilesEnd:
 
-; ---- Canción de prueba (bancos 16 a 18), generada por audio/demo.py ---------------------------------
-INCLUDE "songs/demo/song.asm"
+; ---- Canciones (bancos 16 en adelante): build/list.asm la genera `gbband list-songs` -------------------
+INCLUDE "list.asm"
 
 ; ---- Fuerza el tamaño de 2 MB: un byte en el último banco ------------------------------------------
 SECTION "Relleno banco 127", ROMX[$7FFF], BANK[127]

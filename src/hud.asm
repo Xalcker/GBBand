@@ -88,7 +88,10 @@ OamInit:
     ld [wHeld], a
     cpl
     ld [wHeldPrev], a        ; distinto de wHeld: fuerza a UpdateOam a escribirlo todo
-    jr UpdateOam
+    call UpdateOam
+    ld a, 1                  ; el primer cuadro copia todo el OAM por DMA
+    ld [wOamDirty], a
+    ret
 
 ; Reescribe los aros si cambió qué carriles están apretados
 UpdateOam:
@@ -122,6 +125,6 @@ UpdateOamForce:
     ld a, b
     cp NUM_LANES
     jr nz, .sprite
-    ld a, 1
+    ld a, 2                  ; solo cambian los tiles de los aros (el DMA completo es el de OamInit)
     ld [wOamDirty], a
     ret

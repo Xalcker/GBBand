@@ -10,7 +10,7 @@
 
 SECTION "Audio", ROM0
 
-; Prepara el APU y el reproductor para empezar la canción del banco SONG0_BANK. LCD apagado o ISR sin audio.
+; Prepara el APU y el reproductor para empezar la canción de wSongBank. LCD apagado o ISR sin audio.
 AudioInit:
     xor a
     ld [wRingRead], a
@@ -47,13 +47,14 @@ AudioInit:
     ldh [rNR10], a
 
     ; cursor del stream
-    ld a, SONG0_BANK
+    ld a, [wSongBank]
     ld [rROMB0], a
     ld a, [$4000 + SONG_STREAM]
     ld [wStrPtr], a
     ld a, [$4000 + SONG_STREAM + 1]
     ld [wStrPtr + 1], a
-    ld a, SONG0_BANK + 1
+    ld a, [wSongBank]
+    inc a
     ld [wStrBank], a
     jp FillAudioRing
 
