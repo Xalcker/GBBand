@@ -292,6 +292,7 @@ class Result:
     visual_max: float = 0.0
     visual_mean: float = 0.0
     visual_bias: float = 0.0
+    ram: object = None
     visual_samples: int = 0
     visual_values: list = field(default_factory=list)
     max_sprites_line: int = 0
@@ -323,9 +324,29 @@ def sprites_per_line(oam: bytes) -> int:
     return max(lines)
 
 
+def tap(r: Runner, button: str) -> None:
+    r.pb.button_press(button)
+    r.tick(2)
+    r.pb.button_release(button)
+    r.tick(2)
+
+
+def enter_initials(r: Runner, text: str) -> None:
+    """En la pantalla de resultados de un récord: Start, escribe las iniciales con ↑/↓ (parte de AAA) y ←/→, y confirma con A."""
+    tap(r, "start")
+    assert r.read("wState")[0] == 5, "no apareció la pantalla de iniciales"
+    for pos, letter in enumerate(text):
+        for _ in range(ord(letter) - ord(bytes(r.read("wInitials", 3))[pos:pos + 1].decode())):
+            tap(r, "up")
+        if pos < 2:
+            tap(r, "right")
+    tap(r, "a")
+    r.tick(6)
+
+
 def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, bot_name: str, out: Path,
              visual: bool = False, shots: tuple[int, ...] = (40, 400, 1200), seed: int = 1, no_fail: bool = False,
-             pause_at: int | None = None, pause_frames: int = 40) -> Result:
+             pause_at: int | None = None, pause_frames: int = 40, ram=None, initials: str | None = None) -> Result:
     data = load_song(song)
     info = data.info
     chart = data.chart(instrument, difficulty)
@@ -340,7 +361,7 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
     isr_hist: dict[int, int] = {}
     out.mkdir(parents=True, exist_ok=True)
 
-    with Runner(rom, mode, rom.with_suffix(".sym")) as r:
+    with Runner(rom, mode, rom.with_suffix(".sym"), ram) as r:
         r.boot()
         r.tick(5)
         select_in_menu(r, song_names().index(song), channel, layout.DIFFICULTIES.index(difficulty), no_fail)
@@ -423,6 +444,11 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
         v["pct"] = r.read("wPct")[0]
         v["stars"] = r.read("wStars")[0]
         v["notes_total"] = int.from_bytes(r.read("wNotesTotal", 2), "little")
+        v["new_record"] = r.read("wNewRecord")[0]
+        if initials:
+            enter_initials(r, initials)
+            v["rec_text"] = bytes(r.read("wRecText", 20)).decode("ascii")
+            v["state_after"] = r.read("wState")[0]
         v["score"] = digits(r, "wScoreDigits", 6)
         v["max_combo"] = digits(r, "wMaxComboDigits", 3)
         v["combo"] = digits(r, "wComboDigits", 3)
@@ -443,6 +469,7 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
         cpu_sum = int.from_bytes(r.read("wCpuSum", 4), "little")
         v["cpu_mean_lines"] = cpu_sum / max(cpu_frames, 1)
 
+    result.ram = r.ram
     if errors:
         result.visual_max = max(abs(e) for e in errors)
         result.visual_mean = sum(abs(e) for e in errors) / len(errors)

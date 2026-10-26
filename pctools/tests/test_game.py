@@ -186,3 +186,31 @@ def test_estrellas_de_la_rom_son_las_del_modelo(rom_b):
         r = playtest.run_case(rom_b, "dmg", song, "guitarra", "experto", bot, out_dir(song, bot, "guitarra", "experto", "dmg", "-estrellas"))
         pct, stars = playtest.stars(r.values["score"], r.total_notes)
         assert r.values["pct"] == int(pct) and r.values["stars"] == stars, (bot, pct, stars, r.values["pct"], r.values["stars"])
+
+@pytest.mark.parametrize("mode", MODES)
+def test_records_se_guardan_y_sobreviven_al_reinicio(rom_b, mode):
+    """Un récord nuevo pide iniciales, se guarda en la SRAM (con su suma de verificación) y se ve en el menú, también tras
+    apagar y volver a encender; un puntaje menor no lo reemplaza; perder o jugar sin fallo no graba."""
+    song = QUICK_SONGS[0]
+    a = playtest.run_case(rom_b, mode, song, "guitarra", "experto", "perfecto", out_dir(song, "record1", "guitarra", "experto", mode),
+                          initials="XYZ")
+    assert a.values["new_record"] == 1 and a.values["state_after"] == 1
+    expected = f"RECORD {a.values['score']:06d} XYZ 5*"
+    assert a.values["rec_text"] == expected, a.values["rec_text"]
+    # otra partida peor (humano al 90 %) con la misma SRAM: no es récord, y el récord anterior sigue en el menú
+    b = playtest.run_case(rom_b, mode, song, "guitarra", "experto", "humano90", out_dir(song, "record2", "guitarra", "experto", mode),
+                          ram=a.ram, initials=None)
+    assert b.values["new_record"] == 0
+    # perder no graba, aunque el puntaje fuera mayor; un instrumento distinto tiene su propio récord (vacío)
+    c = playtest.run_case(rom_b, mode, song, "teclado", "experto", "sin-tocar", out_dir(song, "record3", "teclado", "experto", mode),
+                          ram=b.ram)
+    assert c.values["new_record"] == 0
+    d = playtest.run_case(rom_b, mode, song, "guitarra", "experto", "perfecto", out_dir(song, "record4", "guitarra", "experto", mode),
+                          ram=c.ram, no_fail=True)
+    assert d.values["new_record"] == 0, "sin fallo no graba récord"
+    # el récord sobrevive: al abrir el menú de esa canción y dificultad, el texto lo muestra
+    with playtest.Runner(rom_b, mode, rom_b.with_suffix(".sym"), d.ram) as r:
+        r.boot()
+        r.tick(5)
+        playtest.select_in_menu(r, playtest.song_names().index(song), 0, 3)
+        assert bytes(r.read("wRecText", 20)).decode("ascii") == expected
