@@ -1,6 +1,6 @@
-﻿# Compila y corre las pruebas: pytest (conversor de gráficos y pruebas del ROM en PyBoy, modos DMG y CGB).
+﻿# Compila y corre las pruebas: pytest (gráficos, stream de audio, charts y juego completo en PyBoy, modos DMG y CGB).
 # Uso:  .\tests\run_tests.ps1 [-NoBuild]
-# (Las pruebas de juego con bots, resultado.txt y capturas por canción llegan con la fase 2.)
+# Incluye los bots de juego (perfecto, sin tocar, machacando) en DMG y CGB; dejan resultado.txt y capturas en build\test-demo-<bot>-<dificultad>-<modo>.
 param([switch]$NoBuild)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent

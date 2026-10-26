@@ -1,0 +1,356 @@
+"""Pruebas de juego: un bot toca la canción en el emulador (PyBoy, sin ventana) y se revisa lo que quedó en WRAM.
+
+    run_case(rom, mode, difficulty, bot, out)  ->  resultado.txt y capturas en `out`
+
+Los bots reciben el chart y deciden en qué cuadro apretar cada carril. Todo se mide en cuadros del juego: antes
+de cada tick se mira `wT` (las ISR de VBlank que ya corrieron); un botón apretado en ese momento lo lee la ISR
+del cuadro `wT`, que es el que juzga el juego.
+
+Prueba de sincronía: cada nota del chart debe caer en el mismo cuadro en que el audio dispara la nota del CH1
+(contador `wNoteOn` de la ISR: se compara cuadro por cuadro con lo que sabe el generador, notes.json).
+"""
+
+from __future__ import annotations
+
+import json
+import random
+import subprocess
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from pyboy.utils import WindowEvent
+
+from . import layout
+from .runner import Runner
+
+ROOT = Path(__file__).resolve().parents[2]
+SONG_DIR = ROOT / "src" / "songs" / "demo"
+# Carriles: verde = izquierda, rojo = abajo, amarillo = derecha, azul = B, naranja = A.
+# Desde un hook los eventos se mandan con retraso 1: `button_press` agregaría el evento a una lista que PyBoy
+# vacía al final del tick (se perdería). Con retraso 1 lo lee la ISR de VBlank siguiente a la del hook.
+PRESS = (WindowEvent.PRESS_ARROW_LEFT, WindowEvent.PRESS_ARROW_DOWN, WindowEvent.PRESS_ARROW_RIGHT,
+         WindowEvent.PRESS_BUTTON_B, WindowEvent.PRESS_BUTTON_A)
+RELEASE = (WindowEvent.RELEASE_ARROW_LEFT, WindowEvent.RELEASE_ARROW_DOWN, WindowEvent.RELEASE_ARROW_RIGHT,
+           WindowEvent.RELEASE_BUTTON_B, WindowEvent.RELEASE_BUTTON_A)
+HOLD_FRAMES = 3
+STATE_END = 2
+
+
+def song_info() -> dict:
+    return json.loads((SONG_DIR / "notes.json").read_text(encoding="utf-8"))
+
+
+def expected_score(total_notes: int) -> int:
+    """Puntaje de acertar `total_notes` notas seguidas: la nota i vale 50 por su multiplicador
+    (1 con 0-9 de combo, 2 con 10-19, 3 con 20-29, 4 con 30 o más; el combo ya incluye la nota)."""
+    return sum(50 * min(4, i // 10 + 1) for i in range(1, total_notes + 1))
+
+
+STAR_THRESHOLDS = (20, 40, 60, 80, 95)  # % del puntaje máximo para 1 a 5 estrellas (igual que NESBand)
+
+
+def stars(score: int, total_notes: int) -> tuple[float, int]:
+    """(porcentaje del puntaje máximo, estrellas). Las estrellas salen del puntaje, no de las notas acertadas."""
+    pct = 100 * score / expected_score(total_notes)
+    return pct, sum(pct >= t for t in STAR_THRESHOLDS)
+
+
+def lanes_of(mask: int) -> list[int]:
+    return [b for b in range(5) if mask >> b & 1]
+
+
+def build_rom(placement: str = "B", name: str = "") -> Path:
+    """Compila el ROM con el script de build de este sistema. Devuelve la ruta del .gb."""
+    base = f"gbband-{name}" if name else "gbband"
+    if sys.platform == "win32":
+        cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ROOT / "build.ps1"), "-Colocacion", placement]
+        if name:
+            cmd += ["-Nombre", name]
+        env = None
+    else:
+        import os
+
+        cmd = ["bash", str(ROOT / "build.sh")]
+        env = dict(os.environ, COLOCACION=placement, NOMBRE=name)
+    subprocess.run(cmd, check=True, cwd=ROOT, env=env, capture_output=True)
+    return ROOT / "build" / f"{base}.gb"
+
+
+# ---------------------------------------------------------------------------- bots
+
+class Bot:
+    """Decide, para el cuadro `t`, qué carriles se aprietan (los demás se sueltan tras HOLD_FRAMES)."""
+
+    name = "bot"
+
+    def __init__(self, chart: list[tuple[int, int]], seed: int = 1):
+        self.chart = chart
+        self.rng = random.Random(seed)
+
+    def presses(self, t: int) -> list[int]:
+        return []
+
+
+class PerfectBot(Bot):
+    name = "perfecto"
+
+    def __init__(self, chart, seed=1):
+        super().__init__(chart, seed)
+        self.plan: dict[int, list[int]] = {}
+        for frame, mask in chart:
+            self.plan.setdefault(frame, []).extend(lanes_of(mask))
+
+    def presses(self, t):
+        return self.plan.get(t, [])
+
+
+class IdleBot(Bot):
+    name = "sin-tocar"
+
+
+class MasherBot(Bot):
+    """Machaca botones: cada 4 cuadros aprieta un grupo al azar de carriles."""
+
+    name = "machacando"
+
+    def presses(self, t):
+        if t % 4:
+            return []
+        return [l for l in range(5) if self.rng.random() < 0.5]
+
+
+BOTS = {"perfecto": PerfectBot, "sin-tocar": IdleBot, "machacando": MasherBot}
+
+
+# ---------------------------------------------------------------------------- medición visual
+
+def visual_errors(r: Runner, chart: list[tuple[int, int]], s: int, t: int, scheme: str) -> list[float]:
+    """Error (px, dibujada menos ideal) de cada gema visible del chart en el cuadro mostrado `t`.
+
+    Lee el mapa del fondo de VRAM y el SCY real del hardware. Una gema del carril `l` se reconoce por su tile
+    (TILE_GEM + 14 l + variante); el tile de arriba de una variante con desplazamiento k está en la fila de la gema
+    y el de abajo en la siguiente. Se empareja cada nota con la gema del carril más cercana a su posición ideal."""
+    scy = r.pb.memory[0xFF42]
+    errors = []
+    lane_gems: dict[int, list[float]] = {l: [] for l in range(5)}  # posiciones en pantalla de las gemas dibujadas
+    top_idx = {0: 0, 2: 1, 3: 1, 6: 2, 7: 2, 10: 3, 11: 3}  # índice de tile de arriba -> variante
+    bot_idx = {4: 1, 5: 1, 8: 2, 9: 2, 12: 3, 13: 3}
+    for l in range(5):
+        col = 5 + 2 * l
+        for row in range(32):
+            tile = r.pb.memory[0x9800 + row * 32 + col]
+            k = tile - 0x60 - 14 * l
+            if k in top_idx and k in (0, 2, 6, 10):  # la mitad izquierda de arriba
+                bg_y = row * 8 + 2 * top_idx[k]
+            elif k in bot_idx and k in (4, 8, 12):  # la mitad izquierda de abajo
+                bg_y = (row - 1) * 8 + 2 * bot_idx[k]
+            else:
+                continue
+            lane_gems[l].append(float((bg_y - scy) % 256))
+    for frame, mask in chart:
+        for l in lanes_of(mask):
+            ideal = layout.HIT_Y - (frame - t) * s / 256
+            if not -4 <= ideal <= 100:
+                continue
+            near = [(abs((y - ideal + 128) % 256 - 128), y) for y in lane_gems[l]]
+            if not near:
+                errors.append(float("inf"))
+                continue
+            _, y = min(near)
+            errors.append((y - ideal + 128) % 256 - 128)  # el fondo da la vuelta cada 256 px
+    return errors
+
+
+# ---------------------------------------------------------------------------- una partida
+
+@dataclass
+class Result:
+    rom: str
+    mode: str
+    difficulty: str
+    bot: str
+    total_notes: int = 0
+    frames: int = 0
+    values: dict = field(default_factory=dict)
+    note_on: dict = field(default_factory=dict)
+    visual_max: float = 0.0
+    visual_mean: float = 0.0
+    visual_bias: float = 0.0
+    visual_samples: int = 0
+    visual_values: list = field(default_factory=list)
+    max_sprites_line: int = 0
+    muted_late: bool = False
+    nr51_late: int = 0
+
+
+NOTE_ON_REGS = (0x14, 0x19, 0x1E, 0x23)  # byte bajo de NR14, NR24, NR34 y NR44
+
+
+def note_on_counts(r: Runner) -> list[int]:
+    """Altas de nota por canal que contó la ISR (contadores de 8 bits por registro, en wNoteOnCnt)."""
+    base = r.symbols["wNoteOnCnt"]
+    return [r.read(base + reg)[0] for reg in NOTE_ON_REGS]
+
+
+def digits(r: Runner, name: str, n: int) -> int:
+    return int("".join(str(d) for d in r.read(name, n)))
+
+
+def sprites_per_line(oam: bytes) -> int:
+    lines = [0] * 256
+    for i in range(0, 160, 4):
+        y = oam[i]
+        if 0 < y < 160 and oam[i + 1] > 0:
+            for line in range(y - 16, y):
+                if 0 <= line < 144:
+                    lines[line] += 1
+    return max(lines)
+
+
+def run_case(rom: Path, mode: str, difficulty: str, bot_name: str, out: Path, visual: bool = False,
+             shots: tuple[int, ...] = (40, 400, 1200), seed: int = 1) -> Result:
+    info = song_info()
+    chart = [(f, m) for f, m in info["charts"][difficulty]]
+    s = layout.speed_8_8(difficulty)
+    bot = BOTS[bot_name](chart, seed)
+    result = Result(str(rom.name), mode, difficulty, bot_name, total_notes=sum(len(lanes_of(m)) for _, m in chart))
+    lead_in = info["lead_in"]
+    expected_note_on = {lead_in + f for f in info["melody_audio_frames"]}
+    observed_note_on: dict[int, list[int]] = {0: [], 1: [], 2: [], 3: []}
+    errors: list[float] = []
+    isr_hist: dict[int, int] = {}
+    out.mkdir(parents=True, exist_ok=True)
+
+    with Runner(rom, mode, rom.with_suffix(".sym")) as r:
+        r.boot()
+        r.tick(5)
+        r.pb.memory[r.symbols["wDifficulty"]] = layout.DIFFICULTIES.index(difficulty)
+        r.pb.button_press("start")
+        r.tick(2)
+        r.pb.button_release("start")
+        for _ in range(30):
+            r.tick(1)
+            if r.read("wPlaying")[0]:
+                break
+        else:
+            raise TimeoutError("la partida no empezó")
+
+        releases: dict[int, int] = {}  # carril -> cuadro en que se suelta
+        held: set[int] = set()
+        state = {"prev_on": note_on_counts(r), "last_t": None}
+
+        def on_isr_end(_ctx) -> None:
+            """Corre al final de cada ISR de VBlank: el estado es el de un cuadro completo. `wT` ya cuenta el
+            cuadro que acaba de correr (n = wT - 1); aquí se decide qué botones lee la ISR del cuadro wT."""
+            t = int.from_bytes(r.read("wT", 2), "little")
+            n = t - 1
+            if r.read("wPlaying")[0] == 0:
+                return
+            cur = note_on_counts(r)
+            for ch in range(4):
+                if cur[ch] != state["prev_on"][ch]:
+                    observed_note_on[ch] += [n] * ((cur[ch] - state["prev_on"][ch]) % 256)
+            state["prev_on"] = cur
+            isr = r.read("wIsrLast")[0]
+            isr_hist[isr] = isr_hist.get(isr, 0) + 1
+            if visual and n % 5 == 0 and lead_in - 150 < n < info["end_frame"] - 200:
+                errors.extend(e for e in visual_errors(r, chart, s, n, "B") if e != float("inf"))
+            if n == info["end_frame"] - 120:
+                result.nr51_late = r.read("sh_NR51")[0]
+                result.muted_late = bool(r.read("wMuted")[0])
+                result.max_sprites_line = sprites_per_line(r.read(0xC400, 160))
+            for lane in bot.presses(t):
+                if lane not in held:
+                    r.pb.send_input(PRESS[lane], 1)
+                    held.add(lane)
+                releases[lane] = t + HOLD_FRAMES
+            for lane in [l for l, until in releases.items() if t >= until]:
+                r.pb.send_input(RELEASE[lane], 1)
+                held.discard(lane)
+                del releases[lane]
+
+        r.pb.hook_register(0, r.symbols["IsrEnd"], on_isr_end, None)
+        frame_count = 0
+        limit = info["end_frame"] + 300
+        shots_left = set(shots)
+        while r.read("wState")[0] != STATE_END and frame_count < limit:
+            r.tick(1)
+            frame_count += 1
+            now = int.from_bytes(r.read("wT", 2), "little")
+            if now in shots_left:
+                shots_left.discard(now)
+                r.screenshot(out / f"t{now:04d}.png")
+        for lane in list(held):
+            r.pb.send_input(RELEASE[lane])
+        r.tick(10)
+        r.screenshot(out / "final.png")
+        result.frames = frame_count
+        result.note_on = observed_note_on
+        v = result.values
+        v["state"] = r.read("wState")[0]
+        v["score"] = digits(r, "wScoreDigits", 6)
+        v["max_combo"] = digits(r, "wMaxComboDigits", 3)
+        v["combo"] = digits(r, "wComboDigits", 3)
+        v["hits"] = digits(r, "wHitsDigits", 3)
+        v["misses"] = digits(r, "wMissDigits", 3)
+        v["air"] = r.read("wAirCount")[0]
+        v["score_units"] = int.from_bytes(r.read("wScoreUnits", 2), "little")
+        v["late"] = r.read("wLate")[0]
+        v["underrun"] = r.read("wUnderrun")[0]
+        v["vq_overflow"] = r.read("wQOverflow")[0]
+        v["vq_max_bytes"] = r.read("wQMax")[0]
+        v["overrun"] = r.read("wOverrun")[0]
+        v["flush_lines"] = r.read("wFlushLines")[0]
+        v["isr_max_m"] = r.read("wIsrMax")[0] * 64
+        v["isr_hist"] = dict(sorted(isr_hist.items()))
+        v["cpu_max_lines"] = r.read("wCpuMax")[0]
+        cpu_frames = int.from_bytes(r.read("wCpuFrames", 2), "little")
+        cpu_sum = int.from_bytes(r.read("wCpuSum", 4), "little")
+        v["cpu_mean_lines"] = cpu_sum / max(cpu_frames, 1)
+
+    if errors:
+        result.visual_max = max(abs(e) for e in errors)
+        result.visual_mean = sum(abs(e) for e in errors) / len(errors)
+        result.visual_bias = sum(errors) / len(errors)
+        result.visual_samples = len(errors)
+        result.visual_values = errors
+    result.values["expected_note_on"] = sorted(expected_note_on)
+    write_report(result, out, chart, expected_note_on)
+    return result
+
+def sync_errors(result: Result, chart: list[tuple[int, int]], lead_in: int) -> list[str]:
+    """Notas del chart que no caen en el mismo cuadro que el alta de nota del CH1."""
+    on = set(result.note_on[0])
+    return [f"nota del cuadro {f} sin alta de CH1 en ese cuadro" for f, _ in chart if f not in on]
+
+
+def write_report(result: Result, out: Path, chart, expected_note_on) -> None:
+    v = result.values
+    cpu_max_m = v["cpu_max_lines"] * 114
+    cpu_mean_m = v["cpu_mean_lines"] * 114
+    lines = [
+        f"rom={result.rom} modo={result.mode} dificultad={result.difficulty} bot={result.bot}",
+        f"cuadros={result.frames} notas_chart={result.total_notes}",
+        f"puntaje={v['score']} puntaje_esperado_perfecto={expected_score(result.total_notes)} porcentaje={stars(v['score'], result.total_notes)[0]:.1f} estrellas={stars(v['score'], result.total_notes)[1]}",
+        f"aciertos={v['hits']} fallos={v['misses']} golpes_al_aire={v['air']} combo_max={v['max_combo']}",
+        f"atrasos={v['late']} underruns_audio={v['underrun']} desbordes_cola_vram={v['vq_overflow']}",
+        "",
+        "presupuestos (por cuadro):",
+        f"  vram_bytes_max={v['vq_max_bytes']} (objetivo regular <= 96)",
+        f"  vblank_lineas_usadas_hasta_terminar_la_cola_max={v['flush_lines']} de 10 (cada una = 114 M) desbordes_fuera_del_vblank={v['overrun']}",
+        f"  isr_m_cycles_max={v['isr_max_m']} (VBlank ~1140; resolucion 64) distribucion(unidades de 64 M)={v['isr_hist']}",
+        f"  cpu_bucle_principal_m_max={cpu_max_m} medio={cpu_mean_m:.0f} (gameplay <= 5000 + filas/HUD <= 2000; cuadro = 17556; resolucion 114)",
+        f"  sprites_por_linea_max={result.max_sprites_line} (objetivo <= 8; limite del hardware 10)",
+        "",
+        "audio:",
+        f"  altas_de_nota_por_canal={[len(result.note_on[c]) for c in range(4)]}",
+        f"  nr51_cerca_del_final={result.nr51_late:#04x} instrumento_callado={result.muted_late}",
+    ]
+    if result.visual_samples:
+        lines += [
+            "",
+            f"error visual de las gemas ({result.visual_samples} muestras): max={result.visual_max:.2f} px, "
+            f"medio={result.visual_mean:.2f} px, sesgo={result.visual_bias:+.2f} px",
+        ]
+    (out / "resultado.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
