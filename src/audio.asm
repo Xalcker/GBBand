@@ -56,6 +56,9 @@ AudioInit:
     ld a, [wSongBank]
     inc a
     ld [wStrBank], a
+    ld a, [wPracFromP]
+    and a
+    call nz, AudioSeek      ; práctica con inicio adelantado
     jp FillAudioRing
 
 ; Apaga el audio (fin de la canción)
@@ -314,6 +317,7 @@ AudioTickStream:
     sbc d
     ret c                   ; todavía no empieza el audio
 
+ConsumeSlot:
     ld a, [wRingRead]
     ld b, a
     ld a, [wRingWrite]

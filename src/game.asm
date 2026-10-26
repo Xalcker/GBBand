@@ -124,6 +124,13 @@ TitleFrame:
 ; ---- Menú -------------------------------------------------------------------------------------
 ; Cuatro renglones: canción, instrumento, dificultad y fallo. ↑/↓ cambia de renglón, ←/→ el valor, Start empieza.
 EnterMenu:
+    ld a, [wNoFailPrac]
+    and a
+    jr z, .keepFail
+    xor a
+    ld [wNoFail], a
+    ld [wNoFailPrac], a
+.keepFail:
     call BeginTextScreen
     ld de, _SCRN0 + 32 * 1 + 7
     ld hl, TxtTitle
@@ -390,6 +397,11 @@ MenuFrame:
 
 ; ---- Partida ------------------------------------------------------------------------------------
 StartSong:
+    call ApplyOptions
+    xor a
+    ld [wMarkAOn], a
+    ld [wMarkBOn], a
+BeginPlay:
     call LcdOff
     call ClearMaps
     call StageDraw
@@ -401,6 +413,8 @@ StartSong:
     ld [wT + 1], a
     ld [wTJ], a
     ld [wTJ + 1], a
+    ld [wJT], a
+    ld [wJT + 1], a
     ld [wLate], a
     ld [wQMax], a
     ld [wQLast], a
@@ -430,6 +444,7 @@ StartSong:
     ld [wEndFrame], a
     ld a, [$4000 + SONG_END + 1]
     ld [wEndFrame + 1], a
+    call PracticeSetup
 
     call FxClear
     call ApplyOptions
@@ -458,8 +473,17 @@ ApplyOptions:
     ld [wSpeedMode], a
     xor a
     ld [wSpeedPhase], a
-    ld [wJT], a
-    ld [wJT + 1], a
+    ld [wNoFailPrac], a
+    ld a, [wOptPractice]    ; la práctica no pierde nunca (y al volver al menú se restaura lo que había elegido)
+    and a
+    jr z, .noPrac
+    ld a, [wNoFail]
+    and a
+    jr nz, .noPrac
+    inc a
+    ld [wNoFail], a
+    ld [wNoFailPrac], a
+.noPrac:
     ld a, [wInstrument]     ; la batería ignora el espejo
     cp 3
     ld a, 0
@@ -578,6 +602,9 @@ PlayFrame:
     sbc d
     jr c, .notEnd
     call FxClear
+    ld a, [wOptPractice]    ; la práctica no termina: el bucle vuelve a empezar
+    and a
+    jp nz, BeginPlay
     jp EnterResults
 .notEnd:
     ; cuánto tardó este cuadro, en líneas de pantalla (114 M-cycles cada una)
@@ -653,6 +680,21 @@ PauseFrame:
     ld [wState], a
     ret
 .notStart:
+    ld a, [wOptPractice]    ; en la práctica, A y B ponen las marcas del bucle y lo reinician
+    and a
+    jr z, .noMarks
+    bit PADB_A, b
+    jr z, .notMarkA
+    call MarkStart
+    jp c, BeginPlay
+    ret
+.notMarkA:
+    bit PADB_B, b
+    jr z, .noMarks
+    call MarkEnd
+    jp c, BeginPlay
+    ret
+.noMarks:
     bit PADB_SELECT, b
     ret z
     call AudioStop          ; Select: salir al menú sin terminar la canción

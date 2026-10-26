@@ -121,6 +121,9 @@ HighwayInit:
     ld [wBCur + 1], a
     ld [wJCur + 1], a
 
+    ld a, [wPracFromP]
+    and a
+    call nz, PracticeSeek
     call FetchNote
     ld b, PREFILL_ROWS
 .prefill:

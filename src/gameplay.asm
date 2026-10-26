@@ -72,6 +72,13 @@ GameplayInit:
     ld [wMult], a
     ld a, $03
     ld [wHudDirty], a
+    ld a, [wPracFromP]      ; el juez parte de la entrada que dejó PracticeSeek
+    and a
+    jp z, JudgeFeed
+    ld a, [wSeekF]
+    ld [wJFrame], a
+    ld a, [wSeekF + 1]
+    ld [wJFrame + 1], a
     jp JudgeFeed
 
 ; Llena la cola con las siguientes entradas del chart (el banco de la canción debe estar activo).

@@ -211,6 +211,7 @@ INCLUDE "hud.asm"
 INCLUDE "scene.asm"
 INCLUDE "game.asm"
 INCLUDE "options.asm"
+INCLUDE "practice.asm"
 INCLUDE "results.asm"
 INCLUDE "records.asm"
 

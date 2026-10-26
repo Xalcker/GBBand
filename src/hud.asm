@@ -14,6 +14,8 @@ TxtFailed: db "FALLASTE         "
 TxtPaused:   db "PAUSA", 0
 TxtResume:   db "START: SEGUIR", 0
 TxtQuit:     db "SELECT: SALIR", 0
+TxtMarkA:    db "A: INICIO AQUI", 0
+TxtMarkB:    db "B: FIN AQUI", 0
 
 ; Escribe el texto fijo del HUD (LCD apagado)
 HudDraw:
@@ -31,6 +33,15 @@ HudDraw:
     call PrintStr
     ld de, _SCRN1 + 32 * 6 + 3
     ld hl, TxtQuit
+    call PrintStr
+    ld a, [wOptPractice]    ; las marcas solo existen en la práctica
+    and a
+    ret z
+    ld de, _SCRN1 + 32 * 8 + 3
+    ld hl, TxtMarkA
+    call PrintStr
+    ld de, _SCRN1 + 32 * 9 + 3
+    ld hl, TxtMarkB
     jp PrintStr
 
 ; Encola UN grupo de dígitos por cuadro (el primero que haya cambiado), para no pasar de la cuota de VRAM de la ISR.

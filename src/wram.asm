@@ -182,6 +182,20 @@ wSpeedPhase::   ds 1     ; cuadro dentro del ciclo de 4 de la velocidad
 wStepsNow::     ds 1
 wJT::           ds 2     ; el wT de la última vez que se juzgó
 wTSave::        ds 2
+wNoFailPrac::   ds 1     ; la práctica puso wNoFail en 1 (el menú lo vuelve a poner en 0)
+wPracFromP::    ds 1     ; 1 = la práctica empieza adelantada, en wPracP
+wPracP::        ds 2     ; cuadro de la canción donde suena la música al empezar
+wSeekA::        ds 2     ; cuadro de audio de wPracP
+wSeekF::        ds 2     ; (búsqueda en el chart) cuadro de la entrada anterior
+wSeekN::        ds 2     ; cuadros de audio que faltan por adelantar
+wMarkAOn::      ds 1     ; marca de inicio puesta en la pausa
+wMarkA::        ds 2
+wMarkBOn::      ds 1     ; marca de fin
+wMarkB::        ds 2
+wTmpBank::      ds 1
+wTmpPtr::       ds 2
+wMulF::         ds 2     ; cuadros por multiplicar por la velocidad
+wMulR::         ds 3     ; resultado, 8.8
 wStepSpd::      ds 3     ; avance del scroll por cuadro real, 8.16
 
 ; --- efecto al fallar ---

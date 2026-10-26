@@ -608,3 +608,109 @@ def write_report(result: Result, out: Path) -> None:
             f"medio={result.visual_mean:.2f} px, sesgo={result.visual_bias:+.2f} px",
         ]
     (out / "resultado.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+SHADOW_FREQ = (0xC713, 0xC718, 0xC71D)   # sombras de NR13, NR23 y NR33
+
+
+def run_practice(rom: Path, mode: str, song: str, instrument: str, difficulty: str, options: dict[str, int], cycles: int = 2,
+                 marks: list[tuple[int, str]] | None = None, shots: tuple[int, ...] = (), probes: tuple[int, ...] = ()) -> dict:
+    """Juega la práctica con un bot perfecto hasta que el bucle se repita `cycles` veces. Con `marks` = [(wT, "a"|"b")] pausa
+    en ese cuadro y aprieta A (inicio) o B (fin). Devuelve lo que se observó en cada vuelta.
+    Observa: cuadro de arranque del reloj (wT0), fin, aciertos, fallos, notas del chart dentro del bucle, estado de la ISR
+    y las frecuencias de los canales de tono (sombras) en `probe_frames` de la canción, para comparar con una partida normal."""
+    data = load_song(song)
+    info = data.info
+    chart_all = data.chart(instrument, difficulty)
+    channel = INSTRUMENTS.index(instrument)
+    out = {"loops": [], "states": set(), "late": 0, "overrun": 0, "freq": {}, "abs": {}, "shots": []}
+    with Runner(rom, mode, rom.with_suffix(".sym")) as r:
+        r.boot()
+        r.tick(5)
+        select_in_menu(r, song_names().index(song), channel, layout.DIFFICULTIES.index(difficulty))
+        set_options(r, options)
+        r.pb.button_press("start")
+        r.tick(2)
+        r.pb.button_release("start")
+        state = {"last_t": None, "bot": None, "held": set(), "releases": {}, "loop_start": None, "prev_t": None,
+                 "timeline": {}, "marks": list(marks or []), "loops": 0, "sample": None, "snap": {}}
+        hframe = lambda: int.from_bytes(r.read("hFrame", 2), "little")
+
+        def new_bot() -> None:
+            p_start = int.from_bytes(r.read("wPracP", 2), "little") if r.read("wPracFromP")[0] else 0
+            end = int.from_bytes(r.read("wEndFrame", 2), "little")
+            chart = [(f, m) for f, m in chart_all if p_start <= f < end - 8]   # (las del último momento no alcanzan a juzgarse antes de repetir)
+            state["bot"] = PerfectBot(chart, 1)
+            state["window"] = (p_start, end)
+            state["chart_n"] = sum(len(lanes_of(m)) for _, m in chart)
+            state["last_t"] = None
+
+        def on_isr(_ctx) -> None:
+            now_h = hframe()
+            for key in [k for k in state["timeline"] if k <= now_h]:
+                r.pb.send_input(state["timeline"].pop(key), 1)
+            out["states"].add(r.read("wState")[0])
+            if not r.read("wPlaying")[0]:
+                return
+            t = int.from_bytes(r.read("wT", 2), "little")
+            if state.get("await_restart") is not None:      # pausado para poner una marca: espera a que la práctica reinicie
+                if t < state["await_restart"] - 100:
+                    state["await_restart"] = None
+                else:
+                    return
+            if state["bot"] is None or (state["prev_t"] is not None and t < state["prev_t"] - 5) or state["loop_start"] is None:
+                if state["bot"] is not None and state["loop_start"] is not None:   # el bucle volvió a empezar
+                    out["loops"].append({**state["snap"], "window": state["window"], "chart_n": state["chart_n"]})
+                    state["loops"] += 1
+                # (aquí wT ya es el de la vuelta nueva)
+                new_bot()
+                state["loop_start"] = t
+            state["prev_t"] = t
+            state["snap"] = {"combo": digits(r, "wComboDigits", 3), "misses": digits(r, "wMissDigits", 3),
+                             "air": r.read("wAirCount")[0], "units": int.from_bytes(r.read("wScoreUnits", 2), "little")}
+            if state["marks"] and t >= state["marks"][0][0] and not state["timeline"]:
+                _, which = state["marks"].pop(0)
+                btn_press = WindowEvent.PRESS_BUTTON_A if which == "a" else WindowEvent.PRESS_BUTTON_B
+                btn_rel = WindowEvent.RELEASE_BUTTON_A if which == "a" else WindowEvent.RELEASE_BUTTON_B
+                state["timeline"][now_h] = WindowEvent.PRESS_BUTTON_START
+                state["timeline"][now_h + 2] = WindowEvent.RELEASE_BUTTON_START
+                state["timeline"][now_h + 10] = btn_press
+                state["timeline"][now_h + 12] = btn_rel
+                state["prev_t"] = None
+                state["bot"] = None
+                state["loop_start"] = None
+                state["await_restart"] = t
+                return
+            p_start, end = state["window"]
+            if t in (p_start + 30, p_start + 90, p_start + 150, p_start + 400):
+                out["freq"].setdefault(t, {})[state["loops"]] = tuple(r.read(n)[0] for n in SHADOW_FREQ)
+            if t in probes and state["loops"] == 0:
+                out["abs"][t] = tuple(r.read(n)[0] for n in SHADOW_FREQ)
+            if state["last_t"] is None:
+                state["last_t"] = t - 1
+            for tt in range(state["last_t"] + 1, t + 1):
+                for lane in state["bot"].presses(tt):
+                    if lane not in state["held"]:
+                        r.pb.send_input(PRESS[lane], 1)
+                        state["held"].add(lane)
+                    state["releases"][lane] = tt + 4
+            state["last_t"] = t
+            for lane in [l for l, until in state["releases"].items() if t >= until]:
+                r.pb.send_input(RELEASE[lane], 1)
+                state["held"].discard(lane)
+                del state["releases"][lane]
+
+        r.pb.hook_register(0, r.symbols["IsrEnd"], on_isr, None)
+        guard = 0
+        while state["loops"] < cycles and guard < 40000:
+            r.tick(1)
+            guard += 1
+            if guard in shots:
+                out["shots"].append(r.pb.screen.image.copy())
+        out["late"] = r.read("wLate")[0]
+        out["overrun"] = r.read("wOverrun")[0]
+        out["final_state"] = r.read("wState")[0]
+        out["frames_run"] = guard
+        out["seek"] = (int.from_bytes(r.read("wPracP", 2), "little"), int.from_bytes(r.read("wEndFrame", 2), "little"),
+                       r.read("wPracFromP")[0])
+        out["mark_flags"] = (r.read("wMarkAOn")[0], r.read("wMarkBOn")[0])
+    return out

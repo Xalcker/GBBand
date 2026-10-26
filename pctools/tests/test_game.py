@@ -316,3 +316,49 @@ def test_caida(rom_b, mode, fall, difficulty):
     assert r.values["score"] == playtest.expected_score(r.total_notes) and r.values["pct"] == 100
     assert r.values["new_record"] == 0
     common_checks(r)
+
+
+@pytest.mark.parametrize("mode", MODES)
+@pytest.mark.parametrize("start,until", [(1, 2), (2, 3), (3, 4)])
+def test_practica_inicio_y_bucle(rom_b, mode, start, until):
+    """La práctica empieza adelantada (reloj, autopista, chart y audio) y se repite sin resultados ni fallos: cada vuelta
+    juega exactamente las notas del tramo, y el audio (frecuencias de los canales de tono) es el de la partida normal."""
+    song = QUICK_SONGS[0]
+    probes = tuple(range(1000, 6000, 37))
+    prac = playtest.run_practice(rom_b, mode, song, "guitarra", "experto", {"practice": until, "start": start}, cycles=2, probes=probes)
+    p_start, end, from_p = prac["seek"]
+    assert from_p == 1 and prac["final_state"] == 2 and prac["states"] == {2}, "la práctica no debe pasar a resultados"
+    assert len(prac["loops"]) == 2
+    for loop in prac["loops"]:
+        assert loop["misses"] == 0 and loop["air"] == 0, loop
+        assert loop["combo"] == loop["chart_n"] > 10, loop
+        assert loop["window"] == (p_start, end)
+    assert prac["late"] == 0 and prac["overrun"] == 0
+    normal = playtest.run_practice(rom_b, mode, song, "guitarra", "experto", {"practice": 4, "start": 0}, cycles=1, probes=probes)
+    same = diff = 0
+    for t, regs in prac["abs"].items():
+        if t > p_start + 20 and t in normal["abs"]:   # (los primeros cuadros tras P: el keyframe reinicia la nota vigente)
+            same += regs == normal["abs"][t]
+            diff += regs != normal["abs"][t]
+    assert same + diff > 5 and same >= 0.9 * (same + diff), (same, diff)
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_practica_marcas(rom_b, mode):
+    """En la pausa de la práctica, A hace que el bucle empiece 2 s antes de donde pausaste y B que termine donde pausaste;
+    la práctica se reinicia con las marcas y después se repite entre ellas. Una marca que deja el bucle en menos de 4 s se ignora."""
+    song = QUICK_SONGS[0]
+    # A en t >= 1800; B en t >= 2400 (60 cuadros después de A el bucle empieza en ~1680 y termina en ~2400)
+    r = playtest.run_practice(rom_b, mode, song, "guitarra", "experto", {"practice": 3, "start": 0}, cycles=2,
+                              marks=[(1800, "a"), (2400, "b")])
+    p_start, end, from_p = r["seek"]
+    assert r["mark_flags"] == (1, 1) and from_p == 1
+    assert 1800 - 120 <= p_start <= 1800 - 100, p_start       # A: 2 s antes de donde pausaste
+    assert 2400 <= end <= 2420, end                           # B: donde pausaste
+    assert r["final_state"] == 2 and 3 not in [s for s in r["states"] if s == 4], r["states"]
+    last = r["loops"][-1]
+    assert last["misses"] == 0 and last["combo"] == last["chart_n"] > 3, last
+    # una marca B que dejaría el bucle en menos de 4 s no se acepta
+    short = playtest.run_practice(rom_b, mode, song, "guitarra", "experto", {"practice": 3, "start": 2}, cycles=1,
+                                  marks=[(0, "b")])
+    assert short["mark_flags"][1] == 0, "una marca B demasiado cerca del inicio se ignora"
