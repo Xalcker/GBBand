@@ -117,6 +117,7 @@ Start:
     ld [wSong], a
     ld [wInstrument], a
     ld [wMenuRow], a
+    call SramInit
     call EnterTitle
     ei
 
@@ -155,7 +156,7 @@ MainLoop:
 
 ; Un manejador por estado, en el orden de STATE_...
 StateTable:
-    dw TitleFrame, MenuFrame, PlayFrame, PauseFrame, ResultsFrame
+    dw TitleFrame, MenuFrame, PlayFrame, PauseFrame, ResultsFrame, InitialsFrame
 
 ; ---- Utilidades --------------------------------------------------------------
 
@@ -209,6 +210,7 @@ INCLUDE "hud.asm"
 INCLUDE "scene.asm"
 INCLUDE "game.asm"
 INCLUDE "results.asm"
+INCLUDE "records.asm"
 
 ; ---- Gráficos: todos los tiles juntos (build/chr/tiles.2bpp, ver `gbband build-gfx`) -----------------
 SECTION "Tiles", ROM0

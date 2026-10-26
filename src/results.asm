@@ -38,6 +38,7 @@ EnterResults:
     ld [wPlaying], a
     call AudioStop
     call ComputeResults
+    call CheckNewRecord
     call BeginTextScreen
     ld de, _SCRN0 + 32 * 1 + 5
     ld hl, TxtResults
@@ -111,6 +112,13 @@ EnterResults:
     ld hl, TxtNoFailRes
     call PrintStr
 .footer:
+    ld a, [wNewRecord]
+    and a
+    jr z, .noRecord
+    ld de, _SCRN0 + 32 * 15 + 4
+    ld hl, TxtNewRecord
+    call PrintStr
+.noRecord:
     ld de, _SCRN0 + 32 * 17 + 2
     ld hl, TxtContinue
     call PrintStr

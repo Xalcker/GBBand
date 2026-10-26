@@ -36,6 +36,7 @@ DEF MENU_ROW_INSTR EQU 7
 DEF MENU_ROW_DIFF  EQU 10
 DEF MENU_ROW_FAIL  EQU 13
 DEF MENU_ROWS      EQU 4
+DEF MENU_ROW_RECORD EQU 15      ; el récord de lo elegido
 CursorRows: db MENU_ROW_SONG, MENU_ROW_INSTR, MENU_ROW_DIFF, MENU_ROW_FAIL
 
 ; Apaga el LCD (solo en VBlank, o dañaría una DMG). Si ya estaba apagado no hace nada.
@@ -153,6 +154,7 @@ EnterMenu:
     call QueueInstrument
     call QueueDifficulty
     call QueueFail
+    call RefreshRecord
     jp QueueCursor
 
 ; Elige el banco de la canción (wSong), lee su ficha (instrumentos, título y juego) y deja un instrumento válido.
@@ -171,6 +173,7 @@ MenuLoadSong:
     ld de, $4000 + SONG_TITLE
     ld bc, SONG_TITLE_LEN + SONG_GAME_LEN       ; el juego va justo después del título en la ficha
     call CopyMem
+    call ComputeSongHash
     ld a, [wInstrument]
     call InstrAvailable
     ret c
@@ -348,7 +351,8 @@ MenuFrame:
     cp 4
     ret nc                  ; (también atrapa el -1 desde 0, que da $FF)
     ld [wDifficulty], a
-    jp QueueDifficulty
+    call QueueDifficulty
+    jp RefreshRecord
 .instrument:
     ld b, 4
 .try:
@@ -363,7 +367,8 @@ MenuFrame:
     dec b
     jr nz, .try
 .instrumentOk:
-    jp QueueInstrument
+    call QueueInstrument
+    jp RefreshRecord
 .song:
     ld a, [wSong]
     add c
@@ -378,7 +383,8 @@ MenuFrame:
     ld [wSong], a
     call MenuLoadSong
     call QueueSongText
-    jp QueueInstrument
+    call QueueInstrument
+    jp RefreshRecord
 
 ; ---- Partida ------------------------------------------------------------------------------------
 StartSong:
@@ -578,6 +584,9 @@ ResultsFrame:
     ei
     bit PADB_START, b
     ret z
+    ld a, [wNewRecord]      ; un récord pide las iniciales antes de volver al menú
+    and a
+    jp nz, EnterInitials
     jp EnterMenu
 
 ; Encola B bytes de HL en la dirección DE de VRAM (banco 0)

@@ -48,6 +48,19 @@ wDivA::         ds 3     ; dividendo y cociente de Div24By16
 wDivB::         ds 2     ; divisor
 wDivR::         ds 2     ; resto
 wNotesTotal::   ds 2     ; notas de la partida (aciertos + fallos)
+wRecHash::      ds 2     ; hash del título y el juego de la canción elegida
+wRecKey::       ds 1     ; instrumento * 4 + dificultad
+wRecFound::     ds 1
+wRecScore::     ds 3     ; el récord leído: puntaje en BCD (3 bytes), iniciales (3) y estrellas (van seguidos: se copian juntos)
+wRecInit::      ds 3
+wRecStars::     ds 1
+wNewScore::     ds 3     ; el puntaje de la partida, en BCD
+wNewRecord::    ds 1
+wInitials::     ds 3
+wInitPos::      ds 1
+wInitBuf::      ds 5
+wRecText::      ds 20
+wOptionsUsed::  ds 1     ; 1 si se jugó con alguna opción distinta de la normal (no hay récord)
 wTotalDigits::  ds 3
 wPctDigits::    ds 3
 wPerfectUnits:: ds 2     ; unidades de puntaje máximo posible con esas notas
