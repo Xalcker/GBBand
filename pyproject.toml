@@ -1,0 +1,25 @@
+[project]
+name = "gbband-tools"
+version = "0.0.1"
+description = "Herramientas de PC para GBBand: gráficos, corredor de pruebas, canciones y charts"
+requires-python = ">=3.11"
+license = "GPL-2.0-or-later"
+license-files = ["LICENSE"]
+dependencies = []
+
+[project.scripts]
+gbband = "gbband_tools.cli:main"
+
+[dependency-groups]
+# pyboy (corredor de pruebas) y pillow (capturas y fuente) solo hacen falta para pruebas y para regenerar la fuente
+dev = ["pytest>=8", "pyboy>=2.8", "pillow>=10"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pctools/gbband_tools"]
+
+[tool.pytest.ini_options]
+testpaths = ["pctools/tests"]
