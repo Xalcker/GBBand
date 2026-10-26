@@ -1,0 +1,30 @@
+{
+ "name": "salto",
+ "title": "SALTO MORTAL",
+ "game": "GBBAND",
+ "lead_in": 180,
+ "end_frame": 6384,
+ "audio_frames": 6144,
+ "beat": 32,
+ "first_beat": 180,
+ "instrument_mask": 15,
+ "stream_bytes": 11271,
+ "bank_a_bytes": 8762,
+ "keyframes": [
+  0,
+  1536,
+  3072,
+  4608
+ ],
+ "audio": {
+  "drum_hits": 461,
+  "pulse_notes": 540,
+  "envelope_error_mean": 0.932,
+  "envelope_error_max": 2.571,
+  "bad_notes": 192,
+  "retriggers": 164
+ },
+ "log": [
+  "volumen: 192 de 540 notas de pulso quedan con más de 1.5 pasos de error (medio 0.93, máximo 2.6)"
+ ]
+}

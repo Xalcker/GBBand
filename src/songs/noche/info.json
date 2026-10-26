@@ -1,0 +1,28 @@
+{
+ "name": "noche",
+ "title": "NOCHE SIN ESTRELLAS",
+ "game": "GBBAND",
+ "lead_in": 180,
+ "end_frame": 5232,
+ "audio_frames": 4992,
+ "beat": 24,
+ "first_beat": 180,
+ "instrument_mask": 15,
+ "stream_bytes": 13093,
+ "bank_a_bytes": 10368,
+ "keyframes": [
+  0,
+  1248,
+  2496,
+  3744
+ ],
+ "audio": {
+  "drum_hits": 386,
+  "pulse_notes": 826,
+  "envelope_error_mean": 0.069,
+  "envelope_error_max": 0.571,
+  "bad_notes": 0,
+  "retriggers": 84
+ },
+ "log": []
+}

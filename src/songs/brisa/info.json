@@ -1,0 +1,28 @@
+{
+ "name": "brisa",
+ "title": "BRISA DE VERANO",
+ "game": "GBBAND",
+ "lead_in": 180,
+ "end_frame": 6064,
+ "audio_frames": 5824,
+ "beat": 28,
+ "first_beat": 180,
+ "instrument_mask": 15,
+ "stream_bytes": 9822,
+ "bank_a_bytes": 11385,
+ "keyframes": [
+  0,
+  1456,
+  2912,
+  4368
+ ],
+ "audio": {
+  "drum_hits": 445,
+  "pulse_notes": 501,
+  "envelope_error_mean": 0.387,
+  "envelope_error_max": 0.593,
+  "bad_notes": 0,
+  "retriggers": 0
+ },
+ "log": []
+}

@@ -1,0 +1,28 @@
+{
+ "name": "demo",
+ "title": "PRIMER ENSAYO",
+ "game": "GBBAND",
+ "lead_in": 180,
+ "end_frame": 3312,
+ "audio_frames": 3072,
+ "beat": 24,
+ "first_beat": 180,
+ "instrument_mask": 15,
+ "stream_bytes": 7579,
+ "bank_a_bytes": 6538,
+ "keyframes": [
+  0,
+  768,
+  1536,
+  2304
+ ],
+ "audio": {
+  "drum_hits": 256,
+  "pulse_notes": 406,
+  "envelope_error_mean": 0.474,
+  "envelope_error_max": 0.522,
+  "bad_notes": 0,
+  "retriggers": 0
+ },
+ "log": []
+}

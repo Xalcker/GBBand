@@ -1,0 +1,30 @@
+{
+ "name": "cumbia",
+ "title": "CUMBIA DEL CARTUCHO",
+ "game": "GBBAND",
+ "lead_in": 180,
+ "end_frame": 6000,
+ "audio_frames": 5760,
+ "beat": 36,
+ "first_beat": 180,
+ "instrument_mask": 15,
+ "stream_bytes": 8636,
+ "bank_a_bytes": 8824,
+ "keyframes": [
+  0,
+  1440,
+  2880,
+  4320
+ ],
+ "audio": {
+  "drum_hits": 434,
+  "pulse_notes": 407,
+  "envelope_error_mean": 0.823,
+  "envelope_error_max": 1.625,
+  "bad_notes": 144,
+  "retriggers": 0
+ },
+ "log": [
+  "volumen: 144 de 407 notas de pulso quedan con más de 1.5 pasos de error (medio 0.82, máximo 1.6)"
+ ]
+}

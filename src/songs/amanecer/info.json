@@ -1,0 +1,30 @@
+{
+ "name": "amanecer",
+ "title": "AMANECER DIGITAL",
+ "game": "GBBAND",
+ "lead_in": 180,
+ "end_frame": 5616,
+ "audio_frames": 5376,
+ "beat": 28,
+ "first_beat": 180,
+ "instrument_mask": 15,
+ "stream_bytes": 12456,
+ "bank_a_bytes": 10634,
+ "keyframes": [
+  0,
+  1344,
+  2688,
+  4032
+ ],
+ "audio": {
+  "drum_hits": 375,
+  "pulse_notes": 625,
+  "envelope_error_mean": 0.94,
+  "envelope_error_max": 1.333,
+  "bad_notes": 0,
+  "retriggers": 0
+ },
+ "log": [
+  "batería: 76 golpes coinciden en el mismo cuadro (solo hay un canal de ruido): se queda el de más prioridad"
+ ]
+}

@@ -1,0 +1,28 @@
+{
+ "name": "luna",
+ "title": "LUZ DE LUNA",
+ "game": "GBBAND",
+ "lead_in": 180,
+ "end_frame": 5872,
+ "audio_frames": 5632,
+ "beat": 32,
+ "first_beat": 180,
+ "instrument_mask": 15,
+ "stream_bytes": 6256,
+ "bank_a_bytes": 8394,
+ "keyframes": [
+  0,
+  1408,
+  2816,
+  4224
+ ],
+ "audio": {
+  "drum_hits": 218,
+  "pulse_notes": 409,
+  "envelope_error_mean": 0.277,
+  "envelope_error_max": 0.533,
+  "bad_notes": 0,
+  "retriggers": 94
+ },
+ "log": []
+}
