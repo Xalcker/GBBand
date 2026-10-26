@@ -26,6 +26,14 @@ def cmd_build_font(args: argparse.Namespace) -> None:
     print(f"{out.relative_to(ROOT)} generado")
 
 
+def cmd_build_gems(args: argparse.Namespace) -> None:
+    from . import gemgen
+
+    out = ROOT / "src" / "chr" / "gems.tiles"
+    out.write_text(gemgen.build_gems_tiles(), encoding="utf-8", newline="\n")
+    print(f"{out.relative_to(ROOT)} generado")
+
+
 def cmd_smoke(args: argparse.Namespace) -> None:
     from . import runner
 
@@ -33,11 +41,19 @@ def cmd_smoke(args: argparse.Namespace) -> None:
     runner.smoke(rom, Path(args.out) if args.out else ROOT / "build" / f"smoke-{rom.stem}", args.frames)
 
 
+def cmd_measure(args: argparse.Namespace) -> None:
+    from . import measure
+
+    print(measure.measure(ROOT / "reference" / "NESBand"))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="gbband", description="Herramientas de PC de GBBand")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("build-gfx", help="convierte src/chr/*.tiles a build/chr/*.2bpp y PNG de contacto").set_defaults(func=cmd_build_gfx)
     sub.add_parser("build-font", help="regenera src/chr/font.tiles desde Bongo-8 (necesita Pillow)").set_defaults(func=cmd_build_font)
+    sub.add_parser("build-gems", help="regenera src/chr/gems.tiles (gemas con sus variantes)").set_defaults(func=cmd_build_gems)
+    sub.add_parser("measure-placement", help="mide las colocaciones A y B con los charts de NESBand").set_defaults(func=cmd_measure)
     smoke = sub.add_parser("smoke", help="corre un ROM en DMG y CGB y toma capturas")
     smoke.add_argument("rom")
     smoke.add_argument("--frames", type=int, default=120)

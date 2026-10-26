@@ -124,13 +124,18 @@ def contact_sheet(tiles: dict[int, list[str]], path: Path, scale: int = 4, per_r
 
 
 def build_dir(src: Path, out: Path) -> list[Path]:
-    """Convierte cada .tiles de `src` en out/<nombre>.2bpp y out/<nombre>.png. Devuelve los .2bpp."""
+    """Junta todos los .tiles de `src` en un solo juego de tiles (el número de tile es único entre archivos):
+    out/tiles.2bpp (se copia entero a $8000) y out/tiles.png (hoja de contacto). Devuelve [tiles.2bpp]."""
     out.mkdir(parents=True, exist_ok=True)
-    made = []
+    merged: dict[int, list[str]] = {}
+    owner: dict[int, str] = {}
     for file in sorted(src.glob("*.tiles")):
-        tiles = parse_tiles(file.read_text(encoding="utf-8"), file.name)
-        target = out / (file.stem + ".2bpp")
-        target.write_bytes(build_2bpp(tiles))
-        contact_sheet(tiles, out / (file.stem + ".png"))
-        made.append(target)
-    return made
+        for number, rows in parse_tiles(file.read_text(encoding="utf-8"), file.name).items():
+            if number in merged:
+                raise ValueError(f"el tile {number:#04x} está en {owner[number]} y en {file.name}")
+            merged[number] = rows
+            owner[number] = file.name
+    target = out / "tiles.2bpp"
+    target.write_bytes(build_2bpp(merged))
+    contact_sheet(merged, out / "tiles.png")
+    return [target]
