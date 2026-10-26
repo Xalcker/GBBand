@@ -34,7 +34,10 @@ AudioInit:
     ld a, $FF
     ld [wNr51Out], a
 
-    ; APU: encendido, volumen máximo, todos los canales a ambos lados, barrido de CH1 apagado
+    ; APU: se apaga y se enciende (el stream supone los registros en cero, y los menús dejan el APU encendido con restos),
+    ; volumen máximo, todos los canales a ambos lados, barrido de CH1 apagado
+    xor a
+    ldh [rNR52], a
     ld a, $80
     ldh [rNR52], a
     ld a, $77

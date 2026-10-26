@@ -254,6 +254,9 @@ SfxTick:
     ld [wSfxPtr + 1], a
     ret
 .restore:
+    ld a, [wPlaying]        ; sin música (menús) no hay nada que restaurar: el efecto se apaga solo
+    and a
+    ret z
     ; el stream sigue escribiendo la sombra: se vuelve a tocar lo que sonaba en ese canal
     ld d, HIGH(wShadow)
     inc c
