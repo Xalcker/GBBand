@@ -8,10 +8,19 @@ tools/
 build/
 
 # Canciones de juegos comerciales: tienen copyright y nunca entran a git ni a los Releases.
-# Los originales de GBBand se agregan aquí con "!" cuando existan.
+# Los originales de GBBand (GPL-2.0-or-later, componidos con audio/*.py) sí van en git.
 songs_src/
 src/songs/*
 !src/songs/demo/
+!src/songs/tormenta/
+!src/songs/luna/
+!src/songs/salto/
+!src/songs/marcha/
+!src/songs/noche/
+!src/songs/carrera/
+!src/songs/brisa/
+!src/songs/cumbia/
+!src/songs/amanecer/
 
 # Fuentes privadas (solo para tu copia)
 fonts_private/
