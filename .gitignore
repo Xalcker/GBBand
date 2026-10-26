@@ -1,0 +1,26 @@
+# Referencia (clon de NESBand): se baja con `git clone https://github.com/Xalcker/NESBand reference/NESBand`
+reference/
+
+# Herramientas descargadas (RGBDS, Mesen 2): cada máquina baja las suyas, ver README
+tools/
+
+# Salida de compilación y pruebas
+build/
+
+# Canciones de juegos comerciales: tienen copyright y nunca entran a git ni a los Releases.
+# Los originales de GBBand se agregan aquí con "!" cuando existan.
+songs_src/
+src/songs/*
+!src/songs/demo/
+
+# Fuentes privadas (solo para tu copia)
+fonts_private/
+
+# Python (uv)
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+
+# Partidas guardadas de los emuladores
+*.sav
