@@ -1,7 +1,7 @@
 """Generación automática de charts a partir de las notas de un canal de la IR (ver ir.py).
 
 Portado de NESBand. Lo que cambia en la Game Boy: con la colocación B de las gemas (layout.py), dos notas del mismo
-carril necesitan una separación mínima en píxeles (24, 20, 16 y 12 cuadros de fácil a experto); `enforce_lane_gap`
+carril necesitan una separación mínima en píxeles (21, 18, 14 y 11 cuadros de fácil a experto); `enforce_lane_gap`
 las mueve de carril o las quita.
 
 Pasos:
@@ -395,7 +395,7 @@ def enforce_lane_gap(notes: list[Note], masks: list[int], difficulty: Difficulty
     """Separa las gemas del mismo carril lo que pide la colocación (layout.min_lane_gap_frames).
 
     Una gema ocupa 1 o 2 filas de tiles y dos gemas no pueden compartir un tile, así que entre dos notas del
-    mismo carril debe haber al menos `layout.min_lane_gap_frames` cuadros (24, 20, 16 y 12 de fácil a experto).
+    mismo carril debe haber al menos `layout.min_lane_gap_frames` cuadros (21, 18, 14 y 11 de fácil a experto).
     Si el carril de una nota no está libre se pasa al más cercano que sí lo esté (`move`; en la batería los
     carriles son papeles y no se mueven); si no hay ninguno, se quita ese carril. Una nota que se queda sin
     carriles se quita. `stats` cuenta lo movido y lo quitado."""

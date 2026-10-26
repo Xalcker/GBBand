@@ -31,9 +31,9 @@ Decisiones menores que tomé yo, con su motivo. Las de gran tamaño se proponen 
 ## Fase 2
 
 1. **Colocación B** (4 desplazamientos verticales por gema) por mediciones (ver `docs/vram.md`): error máximo 1.5 px contra
-   4.5 px de A. El precio es una separación mínima de 16 px entre dos notas del mismo carril (24 / 20 / 16 / 12 cuadros de
+   4.5 px de A. El precio es una separación mínima de 16 px entre dos notas del mismo carril (21 / 18 / 14 / 11 cuadros de
    fácil a experto); el generador de charts la respeta con `min_lane_gap`. `-Colocacion A` (`COLOCACION=A`) deja la A.
-2. **Los charts no son los de NESBand tal cual.** Velocidad de caída 104 px en 2.6 / 2.2 / 1.7 / 1.3 s (171, 203, 262 y 343
+2. **Los charts no son los de NESBand tal cual.** Velocidad de caída 120 px en 2.6 / 2.2 / 1.7 / 1.3 s (198, 234, 303 y 396
    en 8.8 px/cuadro); `layout.py` es el modelo en Python de lo que hace la ROM y la prueba `test_velocidades_de_la_rom` las
    mantiene iguales. Las demás reglas (ventana de ±6 cuadros, 50 x multiplicador, multiplicador por combo 10 / 20 / 30,
    estrellas por % de puntaje con umbrales 20 / 40 / 60 / 80 / 95) se copiaron de NESBand.

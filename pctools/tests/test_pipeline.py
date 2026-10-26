@@ -115,9 +115,9 @@ def test_separacion_minima_del_mismo_carril():
     # En B una gema puede cruzar dos filas: 16 px; en A, 8 px
     s = layout.speed_8_8("experto")
     assert layout.min_lane_gap_frames(s, "A") == 6
-    assert layout.min_lane_gap_frames(s, "B") == 12
+    assert layout.min_lane_gap_frames(s, "B") == 11
     assert layout.conflicts([(1000, 1), (1001, 1)], s, "B") == 1  # pegadas: comparten tiles
-    assert layout.conflicts([(1000, 1), (1000 + 12, 1)], s, "B") == 0  # a la separación mínima nunca chocan
+    assert layout.conflicts([(1000, 1), (1000 + 11, 1)], s, "B") == 0  # a la separación mínima nunca chocan
     assert layout.conflicts([(1000, 1), (1001, 2)], s, "B") == 0  # en carriles distintos no importa
 
 

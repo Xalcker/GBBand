@@ -22,7 +22,7 @@ editor de charts y `check_playable`. **Todo se mide en cuadros.**
 - Mapper **MBC5+RAM+BATTERY** (2 MB de ROM, 8 KB de SRAM) en lugar de MMC3; RGBDS en lugar de cc65.
 - Sin cambio de banco CHR ni IRQ por scanline estilo MMC3: se usan la Window, `LCDC.4` y los 2 bancos de
   VRAM del GBC.
-- **Los charts no son idénticos a los del NES.** Con 104 px de recorrido (la mitad que el NES) la autopista cae
+- **Los charts no son idénticos a los del NES.** Con 120 px de recorrido (la mitad que el NES) la autopista cae
   a la mitad de velocidad: una fila de 8 px dura 12, 10, 8 y 6 cuadros (fácil a experto) y en NESBand eran
   6, 5, 4 y 3. El generador necesita un parámetro `min_lane_gap` por plataforma (separación mínima entre dos
   notas del mismo carril, en píxeles), así que los charts de GB salen un poco más ralos por carril.
@@ -33,7 +33,7 @@ editor de charts y `check_playable`. **Todo se mide en cuadros.**
 columnas 0-4   escenario izquierdo        columnas 15-19  escenario derecho
 columnas 5-14  autopista: 5 carriles x 2 tiles (x = 40 a 119)
 filas 0-15     fondo con scroll (SCY)     filas 16-17     Window (WY=128, WX=7): puntaje, multiplicador y combo
-aro de aciertos en la fila 13 (y ~ 104)
+aro de aciertos en la fila 15 (y = 120), pegado a la Window como en NESBand
 ```
 
 El fondo usa el mapa `$9800` (32×32): el scroll vertical da la vuelta exacta cada 32 filas. Las filas nuevas se
@@ -72,7 +72,7 @@ rutina de OAM DMA. El mapa exacto está en `src/wram.asm`.
 - **Tiempo.** Todo se mide en cuadros. La ISR de VBlank número `n` (`wT` = n) escribe el audio del cuadro `n - lead_in`,
   pone el `SCY` del cuadro `n` y lee el control; una nota del chart con cuadro `F` está en la línea de golpe en la ISR `F`
   y el audio de su nota se dispara en esa misma ISR (prueba de sincronía).
-- **Posición.** Una nota está en el fondo de 256 px en `y = 104 - F * v` (v en px/cuadro, punto fijo 8.8), y `SCY(t) = -t * v`.
+- **Posición.** Una nota está en el fondo de 256 px en `y = 120 - F * v` (v en px/cuadro, punto fijo 8.8), y `SCY(t) = -t * v`.
   Cada fila de tiles se arma una vez, 24 filas por debajo de la de arriba, cuando el scroll cruza un múltiplo de 8 px.
 - **Gemas.** 5 formas distintas (◀ ▼ ▶ anillo rombo) de 16x8 px con 4 variantes de desplazamiento (colocación B).
 - **Juez.** Cola de 8 notas pendientes `(cuadro, carriles)`; cada carril se acierta o se pierde por separado.
@@ -95,7 +95,7 @@ NSF --> cpu6502.py + nsf.py (APU) -------------+             +--> gbaudio.py -->
   y duty). Un NSF se ejecuta en un 6502 (`cpu6502.py`), se emula el APU (envolventes, longitudes, contador lineal, barrido) y
   se registra el estado de cada cuadro; las notas se derivan de él.
 - **Charts.** El generador de NESBand (contorno, tiempos fuertes, acordes, colas, frases estelares, batería por papeles),
-  más `enforce_lane_gap`: dos gemas del mismo carril necesitan 24 / 20 / 16 / 12 cuadros (fácil a experto) para no compartir
+  más `enforce_lane_gap`: dos gemas del mismo carril necesitan 21 / 18 / 14 / 11 cuadros (fácil a experto) para no compartir
   tiles (ver vram.md). Un chart son pares de 2 bytes (cuadros desde la entrada anterior, carriles y marcas).
 - **Audio.** `gbaudio.py`: Pulso 1/2 -> CH1/CH2, Triángulo -> CH3 con el triángulo de 32 pasos en la wave RAM, Ruido y DPCM
   -> CH4 con parches por papel (bombo, tarola, hi-hat, platillo, toms). Volumen: constante, envolvente por hardware o dos

@@ -20,7 +20,7 @@ DEF NUM_LANES     EQU 5
 
 ; --- Pantalla -------------------------------------------------------------------
 DEF LANE_COL0     EQU 5         ; primera columna de tiles de la autopista
-DEF HIT_ROW       EQU 13        ; fila de tiles de la línea de golpe (y = 104)
+DEF HIT_ROW       EQU 15        ; fila de tiles de la línea de golpe (y = 120), pegada a la Window del HUD
 DEF PREFILL_ROWS  EQU 26        ; filas que se arman con el LCD apagado al empezar
 DEF WINDOW_Y      EQU 128       ; la Window (HUD, 2 filas) empieza en la fila 16
 DEF WINDOW_X      EQU 7

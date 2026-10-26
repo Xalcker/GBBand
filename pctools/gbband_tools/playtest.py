@@ -214,7 +214,7 @@ def visual_errors(r: Runner, chart: list[tuple[int, int]], s: int, t: int, schem
     for frame, mask in chart:
         for l in lanes_of(mask):
             ideal = layout.HIT_Y - (frame - t) * s / 256
-            if not -4 <= ideal <= 100:
+            if not -4 <= ideal <= 116:
                 continue
             near = [(abs((y - ideal + 128) % 256 - 128), y) for y in lane_gems[l]]
             if not near:

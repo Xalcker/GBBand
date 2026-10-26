@@ -31,7 +31,7 @@ medidas en DMG (lectura del mapa de VRAM y del `SCY` real contra la posición id
 | | Error máximo | Error medio | Tiles de gemas | Separación mínima entre dos notas del mismo carril |
 |---|---|---|---|---|
 | **A** (una fila de tiles, 8 px) | **4.46 px** (6.7 cuadros en fácil, 3.3 en experto) | 2.0 px | 10 | 8 px: 12, 10, 8 y 6 cuadros (fácil a experto) |
-| **B** (4 desplazamientos: 0, 2, 4 y 6 px) | **1.50 px** (2.2 cuadros en fácil, 1.1 en experto) | 0.5 px | 70 | 16 px: 24, 20, 16 y 12 cuadros |
+| **B** (4 desplazamientos: 0, 2, 4 y 6 px) | **1.50 px** (2.2 cuadros en fácil, 1.1 en experto) | 0.5 px | 70 | 16 px: 21, 18, 14 y 11 cuadros |
 
 El error de B es 1 px de la gema (a pasos de 2 px) más 0.5 px del `SCY` (que se redondea al píxel más cercano; truncarlo
 sesgaba todo +0.5 px). La ventana de acierto es de ±6 cuadros: con A, en fácil, la nota puede verse 6.7 cuadros fuera de

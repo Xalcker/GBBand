@@ -15,12 +15,12 @@
 
 SECTION "Highway", ROM0
 
-DEF HIT_Y EQU 104
+DEF HIT_Y EQU 120               ; la línea de golpe: fila de tiles 15, justo arriba de la Window (que empieza en y = 128)
 
-; Velocidad 8.8 de cada dificultad (px/cuadro): 104 px en 2.6, 2.2, 1.7 y 1.3 s a 59.7275 Hz.
+; Velocidad 8.8 de cada dificultad (px/cuadro): 120 px en 2.6, 2.2, 1.7 y 1.3 s a 59.7275 Hz.
 ; Debe coincidir con layout.speed_8_8 (lo comprueba una prueba de pytest).
 SpeedTable:
-    dw 171, 203, 262, 343
+    dw 198, 234, 303, 396
 
 GemBase:    db TILE_GEM, TILE_GEM + GEM_STRIDE, TILE_GEM + 2 * GEM_STRIDE, TILE_GEM + 3 * GEM_STRIDE, TILE_GEM + 4 * GEM_STRIDE
 GemTopIdx:  db 0, 2, 6, 10       ; tile de arriba izquierda de la variante 0, 2, 4, 6 px

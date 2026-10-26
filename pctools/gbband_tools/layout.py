@@ -16,8 +16,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-HIT_Y = 104  # y (en pantalla) de la parte de arriba de la gema cuando suena: fila de tiles 13
-TRAVEL = 104  # píxeles que recorre una nota desde el borde de arriba hasta la línea de golpe
+HIT_Y = 120  # y (en pantalla) de la parte de arriba de la gema cuando suena: fila de tiles 15, pegada a la Window
+TRAVEL = 120  # píxeles que recorre una nota desde el borde de arriba hasta la línea de golpe
 FPS = 59.7275  # 70224 ciclos T por cuadro a 4 194 304 Hz
 LANES = 5
 ANTICIPATION = {"facil": 2.6, "medio": 2.2, "dificil": 1.7, "experto": 1.3}  # segundos (igual que NESBand)
