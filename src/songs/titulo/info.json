@@ -1,0 +1,28 @@
+{
+ "name": "titulo",
+ "title": "TITULO",
+ "game": "GBBAND",
+ "lead_in": 180,
+ "end_frame": 1008,
+ "audio_frames": 768,
+ "beat": 24,
+ "first_beat": 180,
+ "instrument_mask": 15,
+ "stream_bytes": 2377,
+ "bank_a_bytes": 1844,
+ "keyframes": [
+  0,
+  192,
+  384,
+  576
+ ],
+ "audio": {
+  "drum_hits": 72,
+  "pulse_notes": 169,
+  "envelope_error_mean": 0.308,
+  "envelope_error_max": 0.522,
+  "bad_notes": 0,
+  "retriggers": 64
+ },
+ "log": []
+}

@@ -66,6 +66,7 @@ VBlankISR:
     ;    cuadros donde entran los cuatro canales a la vez tarda hasta ~400 M). La música se atrasa unas decenas
     ;    de microsegundos según el tamaño de la cola, imperceptible.
     call AudioSteps
+    call SfxTick
     jr .common
 .late:
     ; main_loop no terminó: no se copia nada a VRAM (podría estar a medias), pero el audio sigue
@@ -75,6 +76,7 @@ VBlankISR:
     ld [wLate], a
 .lateSaturated:
     call AudioSteps
+    call SfxTick
 
 .common:
     ; 5. control, una vez por cuadro (dos lecturas iguales)

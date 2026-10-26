@@ -373,3 +373,38 @@ def test_bombo_barra(rom_b, mode):
     assert r.visual_samples > 100 and r.visual_max <= 2.0, (r.visual_samples, r.visual_max)
     assert r.values["score"] == playtest.expected_score(r.total_notes) and r.values["pct"] == 100
     common_checks(r)
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_titulo_musica_y_efectos_de_menu(rom_b, mode):
+    """El título toca su música en bucle (los cuatro canales); al pasar al menú se calla y los botones del menú dan su efecto de sonido."""
+    from gbband_tools.runner import Runner
+
+    with Runner(rom_b, mode, rom_b.with_suffix(".sym")) as r:
+        r.boot()
+        r.tick(60)
+        assert r.read("wState")[0] == 0 and r.read("wPlaying")[0] == 1, "el título debe estar tocando su música"
+        counts = [r.read(0xC800 + reg)[0] for reg in (0x14, 0x19, 0x1E, 0x23)]
+        r.tick(600)
+        counts2 = [r.read(0xC800 + reg)[0] for reg in (0x14, 0x19, 0x1E, 0x23)]
+        assert all(b != a for a, b in zip(counts, counts2)), (counts, counts2)
+        wt = int.from_bytes(r.read("wT", 2), "little")
+        end = int.from_bytes(r.read("wEndFrame", 2), "little")
+        assert 0 < end < 3000
+        r.tick(end + 100)   # da la vuelta sin detenerse
+        assert r.read("wPlaying")[0] == 1
+        # Start: efecto de aceptar y el menú calla la música
+        r.pb.button_press("start")
+        r.tick(2)
+        r.pb.button_release("start")
+        r.tick(2)
+        assert r.read("wState")[0] == 1 and r.read("wPlaying")[0] == 0
+        assert r.read("wSfxLeft")[0] > 0 or r.read("wSfxLast")[0] >= 0
+        seen = set()
+        for button in ("right", "down", "b"):
+            r.pb.button_press(button)
+            r.tick(2)
+            seen.add(r.read("wSfxLeft")[0] > 0)
+            r.pb.button_release(button)
+            r.tick(12)
+        assert True in seen, "los botones del menú deben dar su efecto de sonido"

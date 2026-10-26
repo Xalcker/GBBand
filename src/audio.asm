@@ -65,6 +65,13 @@ AudioInit:
 AudioStop:
     xor a
     ldh [rNR52], a
+ApuOn:                      ; el APU se queda encendido y callado: los efectos de los menús lo necesitan
+    ld a, $80
+    ldh [rNR52], a
+    ld a, $77
+    ldh [rNR50], a
+    ld a, $FF
+    ldh [rNR51], a
     ret
 
 ; ---- Bucle principal: decodificar --------------------------------------------------------
@@ -246,8 +253,7 @@ DecodeFrame:
 ; No toca ROMX. Escribe NR51 (el silencio por fallo es del juego, no de la música) y, si ya empezó el audio
 ; (t >= lead_in), consume un slot del ring.
 AudioTick:
-    call AudioTickStream
-    jp SfxTick
+    jp AudioTickStream
 
 ; Pasos de la canción de este cuadro real (0, 1 o 2 según la velocidad): por cada uno corre el audio y avanza wT.
 ; A 100% siempre es uno. Los ciclos de 4 cuadros: 75% = 1,1,1,0; 50% = 1,0,1,0; 125% = 2,1,1,1.

@@ -16,7 +16,7 @@ CgbRedPal0:
     dw $0004, $0010, $0018, $001F
 
 SfxTable:
-    dw SfxClank, SfxThud, SfxBwomp
+    dw SfxClank, SfxThud, SfxBwomp, SfxMove, SfxAccept, SfxBack
 
 ; len, NRx1 (ciclo de trabajo), NRx2 (envolvente), len frecuencias de 11 bits
 SfxClank:
@@ -28,6 +28,35 @@ SfxThud:
 SfxBwomp:
     db 12, $80, $F1
     dw $64B, $630, $610, $5F0, $5C8, $5A0, $578, $550, $528, $500, $4D0, $4A0
+
+; Menú
+SfxMove:
+    db 3, $80, $A1
+    dw $7A0, $7A8, $7B0
+SfxAccept:
+    db 6, $80, $C1
+    dw $7B0, $7B0, $7B0, $7D0, $7D0, $7D0
+SfxBack:
+    db 5, $80, $B1
+    dw $7B0, $7A0, $790, $780, $770
+
+; A = 0 mover, 1 aceptar, 2 volver: suena en el canal 1. Conserva todos los registros.
+PlayMenuSfx:
+    push af
+    push bc
+    push de
+    push hl
+    ld b, a
+    ld a, $10
+    ld [wSfxBase], a
+    ld a, b
+    add 3
+    call SfxStart
+    pop hl
+    pop de
+    pop bc
+    pop af
+    ret
 
 ; Se llama al romper el combo (nota perdida o golpe al aire)
 MissFx:
@@ -66,6 +95,15 @@ MissFx:
 .new:
     ld a, b
     ld [wSfxLast], a
+    ld a, [wInstrument]     ; la guitarra suena en CH1: el efecto va en CH2; los demás, en CH1
+    and a
+    ld a, $10
+    jr nz, .base
+    ld a, $15
+.base:
+    ld [wSfxBase], a
+    ld a, b
+SfxStart:                   ; A = efecto (índice de SfxTable), wSfxBase ya puesto
     add a
     ld e, a
     ld d, 0
@@ -87,13 +125,6 @@ MissFx:
     ld [wSfxPtr + 1], a
     ld a, 1
     ld [wSfxFirst], a
-    ld a, [wInstrument]     ; la guitarra suena en CH1: el efecto va en CH2; los demás, en CH1
-    and a
-    ld a, $10
-    jr nz, .base
-    ld a, $15
-.base:
-    ld [wSfxBase], a
     ret
 
 ; Un cuadro de juego: enfriamiento y temblor

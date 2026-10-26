@@ -108,9 +108,58 @@ EnterTitle:
     call PrintStr
     ld a, STATE_TITLE
     ld [wState], a
-    jp EndTextScreen
+    call EndTextScreen
+IF DEF(HAS_TITLE_MUSIC)
+    jp StartTitleMusic
+ELSE
+    ret
+ENDC
+
+IF DEF(HAS_TITLE_MUSIC)
+; La música del título vive en su propio slot (bancos TITLE_BANK a TITLE_BANK + 2) y se repite sin parar.
+StartTitleMusic:
+    xor a
+    ld [wPlaying], a
+    ld [wT], a
+    ld [wT + 1], a
+    ld [wSpeedMode], a
+    ld [wPracFromP], a
+    ld [wLeadIn], a         ; sin cuenta previa: el audio arranca de una vez
+    ld [wLeadIn + 1], a
+    ld a, TITLE_BANK
+    ld [wSongBank], a       ; (el menú lo vuelve a fijar con MenuLoadSong)
+    call SwitchBank
+    ld a, [$4000 + SONG_END]    ; la canción dura el final menos su lead-in
+    ld hl, $4000 + SONG_LEADIN
+    sub [hl]
+    ld [wEndFrame], a
+    ld a, [$4000 + SONG_END + 1]
+    inc hl
+    sbc [hl]
+    ld [wEndFrame + 1], a
+    call AudioInit
+    ld a, 1
+    ld [wPlaying], a
+    ret
+ENDC
 
 TitleFrame:
+IF DEF(HAS_TITLE_MUSIC)
+    call FillAudioRing
+    ld a, [wT]
+    ld c, a
+    ld a, [wT + 1]
+    ld b, a
+    ld a, [wEndFrame]
+    ld e, a
+    ld a, [wEndFrame + 1]
+    ld d, a
+    ld a, c
+    sub e
+    ld a, b
+    sbc d
+    call nc, StartTitleMusic
+ENDC
     di
     ldh a, [hPadNew]
     ld b, a
@@ -119,11 +168,14 @@ TitleFrame:
     ei
     bit PADB_START, b
     ret z
+    ld a, 1
+    call PlayMenuSfx
     jp EnterMenu
 
 ; ---- Menú -------------------------------------------------------------------------------------
 ; Cuatro renglones: canción, instrumento, dificultad y fallo. ↑/↓ cambia de renglón, ←/→ el valor, Start empieza.
 EnterMenu:
+    call AudioStop          ; (calla el título)
     ld a, [wNoFailPrac]
     and a
     jr z, .keepFail
@@ -312,12 +364,28 @@ MenuFrame:
     xor a
     ldh [hPadNew], a
     ei
+    ld a, b
+    and (1 << PADB_UP) | (1 << PADB_DOWN) | (1 << PADB_LEFT) | (1 << PADB_RIGHT)
+    ld a, 0
+    call nz, PlayMenuSfx    ; mover
     bit PADB_START, b
-    jp nz, StartSong
+    jr z, .notStart
+    ld a, 1
+    call PlayMenuSfx
+    jp StartSong
+.notStart:
     bit PADB_B, b
-    jp nz, EnterTitle
+    jr z, .notBack
+    ld a, 2
+    call PlayMenuSfx
+    jp EnterTitle
+.notBack:
     bit PADB_SELECT, b
-    jp nz, EnterOptions
+    jr z, .notOptions
+    ld a, 1
+    call PlayMenuSfx
+    jp EnterOptions
+.notOptions:
     bit PADB_DOWN, b
     jr z, .notDown
     ld a, [wMenuRow]

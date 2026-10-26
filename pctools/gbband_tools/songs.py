@@ -34,7 +34,9 @@ ROOT = Path(__file__).resolve().parents[2]
 SONGS_DIR = ROOT / "src" / "songs"
 BUILD_DIR = ROOT / "build"
 
-LEAD_IN = 180  # cuadros de autopista antes de que empiece el audio (más que la anticipación de fácil, 156)
+TITLE_SONG = "titulo"   # la música de la pantalla de título: slot propio (banco TITLE_BANK), fuera de la lista del menú
+TITLE_BANK = 112
+LEAD_IN = 180 # cuadros de autopista antes de que empiece el audio (más que la anticipación de fácil, 156)
 SLOT_BANK_SIZE = 16384
 STREAM_CAPACITY = 2 * SLOT_BANK_SIZE
 FICHA_SIZE = 112
@@ -303,7 +305,7 @@ def list_songs(solo: list[str] | None = None, release: bool = False, root: Path 
     la lista es su slot). `solo` son patrones (como -Solo de build.ps1) y `release` deja solo las versionadas en git."""
     import fnmatch
 
-    names = sorted(p.parent.name for p in (root / "src" / "songs").glob("*/song.asm"))
+    names = sorted(p.parent.name for p in (root / "src" / "songs").glob("*/song.asm") if p.parent.name != TITLE_SONG)
     if release:
         tracked = tracked_songs(root)
         names = [n for n in names if n in tracked]
@@ -322,7 +324,13 @@ def list_songs(solo: list[str] | None = None, release: bool = False, root: Path 
         lines += [f"REDEF SONG_BANK EQU FIRST_SONG_BANK + BANKS_PER_SONG * {slot}", f'INCLUDE "songs/{n}/song.asm"', ""]
     lines += ['SECTION "Tabla de canciones", ROM0', "SongTable::"]
     lines += [f"    db FIRST_SONG_BANK + BANKS_PER_SONG * {slot}  ; {n}" for slot, n in enumerate(names)]
+    has_title = (root / "src" / "songs" / TITLE_SONG / "song.asm").exists()
+    if has_title:                                                       # la música del título, en su propio slot
+        lines += ["", f"REDEF SONG_BANK EQU {TITLE_BANK}", f'INCLUDE "songs/{TITLE_SONG}/song.asm"']
     (root / "build").mkdir(exist_ok=True)
+    # lo que el código necesita saber antes de incluir la lista (se incluye al principio de main.asm)
+    defs = ["; Generado por `gbband list-songs`"] + ([f"DEF HAS_TITLE_MUSIC EQU 1", f"DEF TITLE_BANK EQU {TITLE_BANK}"] if has_title else [])
+    write_lf(root / "build" / "list_defs.inc", "\n".join(defs) + "\n")
     write_lf(root / "build" / "list.asm", "\n".join(lines) + "\n")
     return names
 

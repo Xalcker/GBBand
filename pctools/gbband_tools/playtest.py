@@ -26,6 +26,7 @@ from .runner import Runner
 
 ROOT = Path(__file__).resolve().parents[2]
 SONGS_DIR = ROOT / "src" / "songs"
+TITLE_SONG = "titulo"   # la música del título: va en su propio slot, fuera de la lista del menú
 # Carriles: verde = izquierda, rojo = abajo, amarillo = derecha, azul = B, naranja = A.
 # Desde un hook los eventos se mandan con retraso 1: `button_press` agregaría el evento a una lista que PyBoy
 # vacía al final del tick (se perdería). Con retraso 1 lo lee la ISR de VBlank siguiente a la del hook.
@@ -43,7 +44,7 @@ LANE_MASK = 0x1F
 
 def song_names() -> list[str]:
     """Las canciones de la ROM, en el orden de su lista (alfabético, como `gbband list-songs`)."""
-    return sorted(p.parent.name for p in SONGS_DIR.glob("*/song.asm"))
+    return sorted(p.parent.name for p in SONGS_DIR.glob("*/song.asm") if p.parent.name != TITLE_SONG)
 
 
 @dataclass

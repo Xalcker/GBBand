@@ -175,8 +175,16 @@ OptionsFrame:
     ldh [hPadNew], a
     ei
     ld a, b
+    and (1 << PADB_UP) | (1 << PADB_DOWN) | (1 << PADB_LEFT) | (1 << PADB_RIGHT)
+    ld a, 0
+    call nz, PlayMenuSfx    ; mover
+    ld a, b
     and (1 << PADB_B) | (1 << PADB_START) | (1 << PADB_SELECT)
-    jp nz, EnterMenu
+    jr z, .stay
+    ld a, 2
+    call PlayMenuSfx
+    jp EnterMenu
+.stay:
     bit PADB_DOWN, b
     jr z, .notDown
     ld a, [wOptRow]

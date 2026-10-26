@@ -7,6 +7,7 @@
 INCLUDE "hardware.inc"
 INCLUDE "constants.inc"
 INCLUDE "song_format.inc"
+INCLUDE "list_defs.inc"
 INCLUDE "wram.asm"
 
 ; ---- Vectores de reinicio e interrupciones ----------------------------------
@@ -117,6 +118,7 @@ Start:
     ld [wSong], a
     ld [wInstrument], a
     ld [wMenuRow], a
+    call ApuOn
     call SramInit
     call EnterTitle
     ei
