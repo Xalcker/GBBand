@@ -363,7 +363,8 @@ def enter_initials(r: Runner, text: str) -> None:
 
 def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, bot_name: str, out: Path,
              visual: bool = False, shots: tuple[int, ...] = (40, 400, 1200), seed: int = 1, no_fail: bool = False,
-             pause_at: int | None = None, pause_frames: int = 40, ram=None, initials: str | None = None, use_star: bool = False) -> Result:
+             pause_at: int | None = None, pause_frames: int = 40, ram=None, initials: str | None = None, use_star: bool = False,
+             fx_opt: int | None = None) -> Result:
     data = load_song(song)
     info = data.info
     chart = data.chart(instrument, difficulty)
@@ -395,9 +396,12 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
         else:
             raise TimeoutError("la partida no empezó")
 
+        if fx_opt is not None:
+            r.pb.memory[r.symbols["wOptFx"]] = fx_opt
         releases: dict[int, int] = {}  # carril -> cuadro en que se suelta
         held: set[int] = set()
-        state = {"prev_on": note_on_counts(r), "timeline": {}, "paused": False, "star_cool": 0, "max_energy": 0, "activations": 0, "was_active": 0}
+        state = {"prev_on": note_on_counts(r), "timeline": {}, "paused": False, "star_cool": 0, "max_energy": 0, "activations": 0, "was_active": 0,
+                 "sfx_starts": 0, "sfx_prev": 0, "sfx_ids": set(), "max_scx": 0, "shake_frames": 0, "sfx_times": []}
         hframe = lambda: int.from_bytes(r.read("hFrame", 2), "little")
 
         def on_isr_end(_ctx) -> None:
@@ -425,6 +429,15 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
                 state["timeline"][now_h] = WindowEvent.PRESS_BUTTON_SELECT
                 state["timeline"][now_h + 2] = WindowEvent.RELEASE_BUTTON_SELECT
                 state["star_cool"] = n + 8
+            sfx = r.read("wSfxLeft")[0]
+            if sfx and not state["sfx_prev"]:
+                state["sfx_starts"] += 1
+                state["sfx_ids"].add(r.read("wSfxLast")[0])
+                state["sfx_times"].append(now_h)
+            state["sfx_prev"] = sfx
+            scx = r.read("hScx")[0]
+            state["max_scx"] = max(state["max_scx"], scx if scx < 128 else 256 - scx)
+            state["shake_frames"] += 1 if r.read("wShake")[0] else 0
             cur = note_on_counts(r)
             for ch in range(4):
                 if cur[ch] != state["prev_on"][ch]:
@@ -473,6 +486,8 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
         v["stars"] = r.read("wStars")[0]
         v["notes_total"] = int.from_bytes(r.read("wNotesTotal", 2), "little")
         v["new_record"] = r.read("wNewRecord")[0]
+        v["sfx_starts"], v["sfx_ids"], v["max_scx"], v["shake_frames"] = state["sfx_starts"], state["sfx_ids"], state["max_scx"], state["shake_frames"]
+        v["sfx_times"] = state["sfx_times"]
         v["max_energy"], v["star_activations"] = state["max_energy"], state["activations"]
         if initials:
             enter_initials(r, initials)

@@ -204,6 +204,7 @@ PrintStr:
 
 INCLUDE "isr.asm"
 INCLUDE "audio.asm"
+INCLUDE "fx.asm"
 INCLUDE "highway.asm"
 INCLUDE "gameplay.asm"
 INCLUDE "hud.asm"

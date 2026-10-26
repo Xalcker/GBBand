@@ -611,6 +611,15 @@ BreakCombo:
     ld [wMuted], a
     ld a, $03
     ld [wHudDirty], a
+    push af
+    push bc
+    push de
+    push hl
+    call MissFx
+    pop hl
+    pop de
+    pop bc
+    pop af
     ret
 
 ; ---- Poder estelar -------------------------------------------------------------------------------

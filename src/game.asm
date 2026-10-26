@@ -429,6 +429,7 @@ StartSong:
     ld a, [$4000 + SONG_END + 1]
     ld [wEndFrame + 1], a
 
+    call FxClear
     call HighwayInit
     call GameplayInit
     call OamInit
@@ -470,6 +471,7 @@ PlayFrame:
     call HudUpdate
     call UpdateOam
     call MeterUpdate
+    call FxFrame
     ld a, [wMuted]
     and a
     ld a, $FF
@@ -496,7 +498,10 @@ PlayFrame:
     sub e
     ld a, b
     sbc d
-    jp nc, EnterResults
+    jr c, .notEnd
+    call FxClear
+    jp EnterResults
+.notEnd:
     ; cuánto tardó este cuadro, en líneas de pantalla (114 M-cycles cada una)
     ldh a, [rLY]
     ld b, a
@@ -535,6 +540,7 @@ PlayFrame:
 ; Congela el reloj de la canción (la ISR deja de contar cuadros y de consumir el ring de audio), calla el APU con NR51
 ; y sube la Window sobre la autopista con el texto de la pausa. Al seguir, todo continúa exactamente donde iba.
 EnterPause:
+    call FxClear
     xor a
     ld [wPlaying], a
     ldh [rNR51], a

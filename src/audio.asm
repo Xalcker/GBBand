@@ -243,6 +243,10 @@ DecodeFrame:
 ; No toca ROMX. Escribe NR51 (el silencio por fallo es del juego, no de la música) y, si ya empezó el audio
 ; (t >= lead_in), consume un slot del ring.
 AudioTick:
+    call AudioTickStream
+    jp SfxTick
+
+AudioTickStream:
     ld a, [wNr51Out]
     ldh [rNR51], a
     ld [sh_NR51], a

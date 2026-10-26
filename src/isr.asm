@@ -20,6 +20,11 @@ VBlankISR:
     and a
     jr nz, .late
 
+    ; 0. tinte rojo del fallo (solo al empezar y al terminar)
+    ldh a, [hPalFx]
+    and a
+    call nz, ApplyPalFx
+
     ; 1. OAM: DMA completo (160 M) solo cuando cambió algo (aros, medidores)
     ld a, [wOamDirty]
     and a
@@ -33,6 +38,8 @@ VBlankISR:
     ; 3. scroll y LCDC
     ldh a, [hScy]
     ldh [rSCY], a
+    ldh a, [hScx]
+    ldh [rSCX], a
     ldh a, [hLcdc]
     ldh [rLCDC], a
     ldh a, [hWy]

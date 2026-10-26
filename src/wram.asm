@@ -166,6 +166,18 @@ wHudDirty::     ds 1
 wQSrc::         ds 2
 wQDigit::       ds 1
 
+; --- efecto al fallar ---
+wOptFx::        ds 1     ; opción EFECTO AL FALLAR: 0 si, 1 solo sonido, 2 no
+wFxCool::       ds 1     ; cuadros hasta poder repetir el efecto
+wShake::        ds 1     ; cuadros que le quedan al temblor y al tinte rojo
+wSfxLast::      ds 1     ; el último efecto de sonido (para no repetirlo)
+wSfxLeft::      ds 1     ; cuadros que le quedan al efecto de sonido (+1: el último restaura el canal)
+wSfxPtr::       ds 2
+wSfxBase::      ds 1     ; byte bajo de NRx0 del canal que usa el efecto
+wSfxFirst::     ds 1
+wSfxDuty::      ds 1
+wSfxEnv::       ds 1
+
 wVQDummy::      ds 128   ; destino inofensivo cuando la cola se llena
 
 ; ---- HRAM --------------------------------------------------------------------
@@ -183,4 +195,6 @@ hLcdc::      ds 1
 hWy::        ds 1        ; WY de la Window (la ISR lo copia: sube durante la pausa)
 hIsrT0::     ds 1
 hPassLY::    ds 1
+hScx::       ds 1        ; SCX de la autopista (el temblor al fallar)
+hPalFx::     ds 1        ; 1 = la ISR pone el tinte rojo, 2 = vuelve a lo normal, 0 = nada
 hOamDma::    ds 10       ; copia de la rutina de OAM DMA (corre desde HRAM)
