@@ -362,3 +362,14 @@ def test_practica_marcas(rom_b, mode):
     short = playtest.run_practice(rom_b, mode, song, "guitarra", "experto", {"practice": 3, "start": 2}, cycles=1,
                                   marks=[(0, "b")])
     assert short["mark_flags"][1] == 0, "una marca B demasiado cerca del inicio se ignora"
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_bombo_barra(rom_b, mode):
+    """El bombo de la batería se dibuja como una barra que cruza los carriles, en su posición, sin pasarse de la cuota de VRAM."""
+    song = QUICK_SONGS[0]
+    r = playtest.run_case(rom_b, mode, song, "bateria", "experto", "perfecto", out_dir(song, "bombo", "bateria", "experto", mode),
+                          visual=True, shots=(300, 900))
+    assert r.visual_samples > 100 and r.visual_max <= 2.0, (r.visual_samples, r.visual_max)
+    assert r.values["score"] == playtest.expected_score(r.total_notes) and r.values["pct"] == 100
+    common_checks(r)

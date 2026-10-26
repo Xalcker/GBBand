@@ -293,6 +293,11 @@ BOTS = {"perfecto": PerfectBot, "sostiene": HoldBot, "sin-tocar": IdleBot, "mach
 
 # ---------------------------------------------------------------------------- medición visual
 
+BAR_TILE = 0xA6
+BAR_TOP_L = {BAR_TILE + 1 + 4 * (v - 1): v for v in (1, 2, 3)}        # tile de arriba izquierda de la barra -> desplazamiento / 2
+BAR_BOT_L = {BAR_TILE + 3 + 4 * (v - 1): v for v in (1, 2, 3)}
+
+
 def visual_errors(r: Runner, chart: list[tuple[int, int]], s: int, t: int, scheme: str) -> list[float]:
     """Error (px, dibujada menos ideal) de cada gema visible del chart en el cuadro mostrado `t`.
 
@@ -313,6 +318,12 @@ def visual_errors(r: Runner, chart: list[tuple[int, int]], s: int, t: int, schem
                 bg_y = row * 8 + 2 * top_idx[k]
             elif k in bot_idx and k in (4, 8, 12):  # la mitad izquierda de abajo
                 bg_y = (row - 1) * 8 + 2 * bot_idx[k]
+            elif l == 4 and tile == BAR_TILE:       # el bombo (batería): barra que cruza los carriles
+                bg_y = row * 8
+            elif l == 4 and tile in BAR_TOP_L:
+                bg_y = row * 8 + 2 * BAR_TOP_L[tile]
+            elif l == 4 and tile in BAR_BOT_L:
+                bg_y = (row - 1) * 8 + 2 * BAR_BOT_L[tile]
             else:
                 continue
             lane_gems[l].append(float((bg_y - scy) % 256))

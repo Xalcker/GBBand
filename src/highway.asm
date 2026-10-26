@@ -419,6 +419,16 @@ PlaceTail:
 PlaceNote:
     ld a, [wNMask]
     ld c, a
+    ld a, [wInstrument]
+    cp 3
+    jr nz, .lanes0
+    bit 4, c                ; batería: el bombo (carril naranja) es una barra que cruza todo; va primero y las gemas encima
+    jr z, .lanes0
+    push bc
+    call PlaceBar
+    pop bc
+    res 4, c
+.lanes0:
     ld b, 0                 ; B = carril
 .lane:
     srl c
@@ -476,6 +486,100 @@ IF PLACEMENT_B
     call nz, QueuePatch
 ENDC
     pop bc
+    ret
+
+; El bombo: los 10 tiles del ancho de la autopista de la fila (y su parte de abajo, con desplazamiento, en la siguiente)
+PlaceBar:
+    ld a, 1
+    ld [wRowHas], a
+    ld a, [wNV]
+    and a
+    jr nz, .shifted
+    ld a, TILE_BAR
+    ld hl, wRowTiles
+    ld b, 10
+.full:
+    ld [hl+], a
+    dec b
+    jr nz, .full
+    jr .attr
+.shifted:
+    dec a
+    add a
+    add a                   ; 4 * (desplazamiento / 2 - 1)
+    add TILE_BAR + 1        ; tile de arriba izquierda
+    ld c, a
+    ld hl, wRowTiles
+    ld b, 5
+.pairs:
+    ld a, c
+    ld [hl+], a
+    inc a
+    ld [hl+], a
+    dec b
+    jr nz, .pairs
+.attr:
+    ld hl, wRowAttr
+    ld b, 10
+    ld a, 5                 ; paleta del naranja
+.attrLoop:
+    ld [hl+], a
+    dec b
+    jr nz, .attrLoop
+    ld a, [wNOff]
+    and a
+    ret z
+    ; la parte de abajo cae en la fila siguiente
+    ld a, [wBuildQ]
+    inc a
+    and 31
+    ld e, a
+    ld d, 0
+    ld hl, wRowFlags
+    add hl, de
+    ld [hl], 1
+    ld a, [wBuildQ]
+    inc a
+    call RowDest
+    ld a, l
+    ld [wQDest], a
+    ld a, h
+    ld [wQDest + 1], a
+    ld d, h
+    ld e, l
+    ld b, 10
+    ld c, 0
+    call VQAlloc
+    ld a, [wNV]
+    dec a
+    add a
+    add a
+    add TILE_BAR + 3        ; tile de abajo izquierda = el de arriba izquierda + 2
+    ld c, a
+    ld b, 5
+.botPairs:
+    ld a, c
+    ld [hl+], a
+    inc a
+    ld [hl+], a
+    dec b
+    jr nz, .botPairs
+    ldh a, [hCGB]
+    and a
+    ret z
+    ld a, [wQDest]
+    ld e, a
+    ld a, [wQDest + 1]
+    ld d, a
+    ld b, 10
+    ld c, $80
+    call VQAlloc
+    ld b, 10
+    ld a, 5
+.botAttr:
+    ld [hl+], a
+    dec b
+    jr nz, .botAttr
     ret
 
 ; HL = $9800 + (A & 31) * 32 + 5  (clobbera DE)

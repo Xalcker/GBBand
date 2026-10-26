@@ -55,6 +55,7 @@ DEF TILE_METER    EQU $10       ; 5 pares de tiles (sprites 8x16): segmento de m
 DEF TILE_TAIL_L   EQU $0E       ; cola de las notas sostenidas (mitad izquierda y derecha del carril)
 DEF TILE_TAIL_R   EQU $0F
 DEF TILE_GEM      EQU $60       ; 14 tiles por carril (ver gemgen.py)
+DEF TILE_BAR      EQU $A6       ; el bombo: 13 tiles (llena y, por desplazamiento, arriba/abajo izquierda/derecha)
 DEF GEM_STRIDE    EQU 14
 
 ; --- Audio ----------------------------------------------------------------------

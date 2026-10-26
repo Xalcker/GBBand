@@ -74,6 +74,22 @@ def meter_tiles() -> list[tuple[str, list[str]]]:
     return tiles
 
 
+TILE_BAR = 0xA6  # el bombo de la batería: una barra que cruza los 5 carriles
+
+
+def bar_tiles() -> list[tuple[str, list[str]]]:
+    """Los 13 tiles de la barra (se repiten en los 10 tiles del ancho de la autopista): uno lleno y, por cada desplazamiento
+    de 2, 4 y 6 px, arriba y abajo en su versión de tile izquierdo (línea de carril en la columna 0) y derecho."""
+    art = ["33333333", "22222222", "22222222", "11111111", "11111111", "22222222", "22222222", "33333333"]
+    tiles = [("barra llena", art)]
+    for k in (2, 4, 6):
+        for side, blank in (("izq", BG_LEFT), ("der", BG_RIGHT)):
+            tiles.append((f"barra desp {k} arriba {side}", [art[r - k] if r >= k else blank for r in range(8)]))
+        for side, blank in (("izq", BG_LEFT), ("der", BG_RIGHT)):
+            tiles.append((f"barra desp {k} abajo {side}", [art[8 - k + r] if r < k else blank for r in range(8)]))
+    return tiles
+
+
 def build_gems_tiles() -> str:
     lines = [
         "# Generado por `gbband build-gems` - no editar a mano",
@@ -96,6 +112,10 @@ def build_gems_tiles() -> str:
             lines += rows
     lines.append(f"@{TILE_METER:02X}  ; medidores (sprites 8x16: vida y poder estelar)")
     for name, rows in meter_tiles():
+        lines.append(f"# {name}")
+        lines += rows
+    lines.append(f"@{TILE_BAR:02X}  ; el bombo: barra naranja a lo ancho de los carriles")
+    for name, rows in bar_tiles():
         lines.append(f"# {name}")
         lines += rows
     return "\n".join(lines) + "\n"
