@@ -73,6 +73,8 @@ Mesen de pruebas: `tools\mesen\Mesen.exe --testrunner <rom absoluta> <script.lua
 - **PyBoy y bots:** el menú se maneja con botones de verdad (`playtest.select_in_menu`), no escribiendo en WRAM, porque
   `MenuLoadSong` es lo que fija el banco de la canción.
 - Valor de A al arrancar: `$11` en CGB, `$01` en DMG.
+- **RAM al encender:** PyBoy deja la HRAM y la WRAM en ceros, pero SameBoy y las consolas reales no. `Start` limpia toda la
+  HRAM; toda variable nueva debe inicializarse (`test_arranca_con_hram_sucia` mete basura en la HRAM para comprobarlo).
 - **Textos grandes en una pantalla nueva:** con el LCD apagado, encola todo y llama a `FlushVQueue` antes de encender (el primer
   VBlank no aguanta más de ~90 bytes); el menú y las opciones lo hacen así.
 - **Música del título:** slot propio (banco 112) con `HAS_TITLE_MUSIC` en `build/list_defs.inc`; `src/songs/titulo` va en git
