@@ -143,3 +143,11 @@ Decisiones menores que tomé yo, con su motivo. Las de gran tamaño se proponen 
     se queda encendido (`ApuOn`) en los menús para que suenen.
 22. **Pendiente de la fase 4 que pasa a la 5:** los platillos con su propio dibujo, la prueba en hardware real y en DMG de Mesen,
     la verificación de `build.sh` en macOS, y el modo de 2 jugadores por cable.
+23. **ROM0 llena.** Con el cable link, el código ya no cupo en los 16 KB de ROM0. Los tiles (3.3 KB, `build/chr/tiles.2bpp`)
+    pasaron al banco 1 (los bancos 1 a 15 están libres: las canciones empiezan en el 16) y solo se copian a la VRAM al arrancar;
+    el reflector encendido y apagado, que se copian en cada tiempo de la partida con el banco de la canción puesto, tienen su
+    copia en ROM0 (`LampOnTile`, `LampOffTile`). Quedan ~3 KB libres en ROM0: lo siguiente grande (Co-Op) puede necesitar
+    mover código que no corra en la ISR ni con el banco de la canción puesto a un banco propio.
+24. **Cable link.** Ver la sección "2 jugadores por cable link" de [diseno.md](diseno.md): protocolo de mensajes con tipo,
+    suma de comprobación y "nada que mandar" en `$80`; todo lo importante se repite hasta que el otro contesta, porque las
+    pruebas pierden bytes a propósito (`LinkBridge(drop_rate=...)`). La ISR serie va en ROM0 y no cambia de banco.

@@ -79,6 +79,9 @@ Mesen de pruebas: `tools\mesen\Mesen.exe --testrunner <rom absoluta> <script.lua
   (excepción en `.gitignore`) pero no sale en el menú ni en `song_names()` de las pruebas.
 - **Pruebas con opciones:** `playtest.run_case(..., options={"mirror": 1, "speed": 2, ...})` las pone con botones de verdad en la
   pantalla de opciones; `playtest.run_practice` juega la práctica en bucle con marcas.
+- **ROM0 casi llena** (~3 KB libres): los tiles viven en el banco 1 (ver `docs/decisiones.md`, punto 23). Si `rgblink` dice
+  "Unable to place ... (ROM0 section)", hay que mover algo a un banco: nunca la ISR ni lo que se lee con el banco de la canción
+  puesto.
 - **Cable link en pruebas:** `linkbridge.LinkBridge` conecta dos `Runner` (el link de PyBoy no sirve: hilos y siempre `$FF`).
   Dos emuladores idénticos que entran en el mismo cuadro nunca se desempatan: en las pruebas, que entren al menos un cuadro
   aparte. El puente puede perder bytes (y `drop_rate` los pierde a propósito): todo mensaje importante del protocolo se

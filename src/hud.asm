@@ -9,6 +9,8 @@ DEF HUD_ROW1 EQU _SCRN1 + 32          ; COMBO 000 MAX 000
 
 HudText0: db "000000  X1", 0
 HudText1: db "COMBO  000", 0
+HudTextVs1: db "J1  000000", 0      ; VS: en vez del combo, el puntaje del otro
+HudTextVs2: db "J2  000000", 0
 TxtFailed: db " FALLASTE "
 ; Más abajo en el mapa de la Window (no se ve salvo en la pausa, cuando la Window sube a PAUSE_WY)
 TxtPaused:   db "PAUSA", 0
@@ -24,6 +26,15 @@ HudDraw:
     call PrintStr
     ld de, HUD_ROW1 + 5
     ld hl, HudText1
+    ld a, [wVsGame]
+    and a
+    jr z, .row1
+    ldh a, [hLinkMaster]    ; el otro es el jugador 2 si esta consola es el 1
+    and a
+    ld hl, HudTextVs2
+    jr nz, .row1
+    ld hl, HudTextVs1
+.row1:
     call PrintStr
     call CrowdDraw
     ld de, _SCRN1 + 32 * 3 + 7
@@ -46,7 +57,8 @@ HudDraw:
     jp PrintStr
 
 ; Encola UN grupo de dígitos por cuadro (el primero que haya cambiado), para no pasar de la cuota de VRAM de la ISR.
-; wHudDirty: bit 0 puntaje y multiplicador, bit 1 combo y máximo. (Aciertos y fallos solo salen al final de la canción.)
+; wHudDirty: bit 0 puntaje y multiplicador, bit 1 combo y máximo, bit 2 "FALLASTE", bit 3 puntaje del otro (VS).
+; (Aciertos y fallos solo salen al final de la canción.)
 HudUpdate:
     ld a, [wHudDirty]
     bit 0, a
@@ -84,9 +96,11 @@ HudUpdate:
     jr z, .notCombo
     ld c, a
     ld a, [wFailed]
-    and a
+    ld b, a
+    ld a, [wVsGame]
+    or b
     ld a, c
-    jr nz, .notCombo          ; con la derrota ya no se actualiza el combo
+    jr nz, .notCombo          ; con la derrota ya no se actualiza el combo (y en VS ese renglón es del otro)
     res 1, a
     ld [wHudDirty], a
     ld hl, wComboDigits
@@ -94,7 +108,17 @@ HudUpdate:
     ld b, 3
     jp QueueDigits
 .notCombo:
-    ret
+    bit 3, a                  ; VS: llegó el puntaje del otro
+    ret z
+    res 3, a
+    ld [wHudDirty], a
+    ld a, [wVsGame]
+    and a
+    ret z
+    ld hl, wRivalDigits
+    ld de, HUD_ROW1 + 9
+    ld b, 6
+    jp QueueDigits
 
 ; Encola B dígitos (decimales, de HL) como caracteres en la dirección DE de VRAM
 QueueDigits:
