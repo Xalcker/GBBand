@@ -808,6 +808,7 @@ PlayFrame:
     call HighwayStep
     call HudUpdate
     call UpdateOam
+    call FlameTick
     call MeterUpdate
     call FxFrame
     call StageBeat

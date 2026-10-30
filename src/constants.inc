@@ -69,6 +69,10 @@ DEF TILE_CROWD_DOWN EQU $1D     ; público: arriba con los brazos abajo / arriba
 DEF TILE_CROWD_UP EQU $1E
 DEF TILE_CROWD_BODY EQU $1F
 DEF TILE_LAMP_OFF EQU $B3       ; (no se dibuja: se copia sobre TILE_LAMP en cada tiempo)
+DEF TILE_FLAME    EQU $B4       ; llamarada al acertar: 3 cuadros de animación de 8x16 ($B4-$B9)
+DEF FLAME_TIME    EQU 12        ; cuadros que dura (4 por cuadro de animación)
+DEF FLAME_ATTR    EQU $15       ; paleta de sprites 5 (fuego) en CGB, OBP1 en DMG
+DEF FLAME_ATTR_STAR EQU $06     ; con el poder estelar: paleta 6 (fuego azul) en CGB, OBP0 en DMG
 DEF TILE_METER    EQU $10       ; 5 pares de tiles (sprites 8x16): segmento de medidor con 0, 4, 8, 12 y 16 px llenos
 DEF TILE_TAIL_L   EQU $0E       ; cola de las notas sostenidas (mitad izquierda y derecha del carril)
 DEF TILE_TAIL_R   EQU $0F
