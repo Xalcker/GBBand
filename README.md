@@ -115,7 +115,8 @@ copias del ROM (`gbband-j1.gb` y `gbband-j2.gb`) para que cada una tenga su prop
 - **Windows, BGB** ([bgb.bircd.org](https://bgb.bircd.org)): abre dos BGB, cada uno con su copia. En el primero, clic
   derecho → *Link* → *Listen* (acepta el puerto); en el segundo, *Link* → *Connect* a `127.0.0.1` con el mismo puerto.
 - **macOS, SameBoy** ([sameboy.github.io](https://sameboy.github.io), o `brew install --cask sameboy`): abre las dos
-  copias en dos ventanas y, desde el menú de una de ellas, conecta el cable con la otra ventana.
+  copias en dos ventanas (`open -a SameBoy build/gbband-j1.gb`, y lo mismo con `j2`) y, con una de ellas al frente, usa
+  el submenú *Connect* → *Game Link Cable & Infrared* para elegir la otra ventana.
 - **RetroArch con el núcleo SameBoy** (cualquier sistema): en modo de dos cartuchos el núcleo muestra las dos consolas
   conectadas en una sola ventana.
 
