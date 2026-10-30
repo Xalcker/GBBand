@@ -402,7 +402,10 @@ def test_titulo_musica_y_efectos_de_menu(rom_b, mode):
         r.pb.button_press("start")
         r.tick(2)
         r.pb.button_release("start")
-        r.tick(2)
+        for _ in range(10):  # pasar al menú tarda 4 o 5 cuadros según el cuadro de la música en que se pulsa
+            r.tick(1)
+            if r.read("wState")[0] == 1:
+                break
         assert r.read("wState")[0] == 1 and r.read("wPlaying")[0] == 0
         assert r.read("wSfxLeft")[0] > 0 or r.read("wSfxLast")[0] >= 0
         seen = set()
