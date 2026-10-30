@@ -65,8 +65,11 @@ carriles, medio 4 y difícil y experto 5. En la batería el bombo es una barra n
   canciones) y un cable link. En el título, ←/→ cambia JUGADORES a `2 JUG. VS` o `2 JUG. COOP` y Start busca al otro.
   El que queda como jugador 1 elige la canción (y en VS la dificultad); cada quien elige su instrumento, y en Co-Op no
   pueden ser el mismo. Abajo se ve qué eligió el otro. Start dice "listo" y, con los dos listos, la canción empieza a la
-  vez en las dos consolas. Con 2 jugadores no hay opciones ni pausa. Por ahora cada quien juega su partida; el marcador
-  del rival (VS) y el de la banda (Co-Op) vienen después.
+  vez en las dos consolas. Con 2 jugadores no hay opciones ni pausa. **VS:** abajo ves el puntaje del otro (`J2  001230`) en
+  lugar del combo; si el otro falla con otro instrumento, su canal también se calla en tu consola; con fallo activado, si
+  alguien pierde, la partida termina para los dos (sin récord). Los resultados dicen `GANA J1 POR 001230`, `EMPATE` o
+  `GANA J1 - J2 PERDIO`. El Co-Op (puntaje, combo y poder estelar de la banda) viene después: por ahora cada quien juega
+  su partida.
 
 **Canciones incluidas** (originales de NESBand, GPL-2.0-or-later, componidas en Python con `audio/*.py`): *Primer Ensayo*,
 *Tormenta de Neon* (rock), *Luz de Luna* (balada), *Salto Mortal* (funk), *Marcha del Cartucho*, *Noche sin Estrellas*,

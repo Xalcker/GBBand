@@ -32,12 +32,18 @@ DEF MSG_MENU  EQU $82           ; canción, instrumento, dificultad, banderas (b
 DEF MSG_START EQU $83           ; canción (el 1 al 2: prepárala; se repite hasta que el 2 contesta MSG_SET)
 DEF MSG_SET   EQU $84           ; el 2 al 1: 0 = ya preparé la canción, 1 = ya tengo la cuenta regresiva
 DEF MSG_GO    EQU $85           ; cuadros que faltan para echarla a andar (el 1 al 2; se repite hasta llegar a 0)
+DEF MSG_SCORE EQU $86           ; jugando y en resultados: puntaje (6 dígitos, dos por byte) y banderas (RIVALB_...)
 
 DEF GOTB_HELLO EQU 0            ; bits de wLinkGot
 DEF GOTB_MENU  EQU 1
 DEF GOTB_START EQU 2
 DEF GOTB_SET   EQU 3
 DEF GOTB_GO    EQU 4
+DEF GOTB_SCORE EQU 5
+
+DEF RIVALB_FAILED   EQU 0       ; banderas de MSG_SCORE: se le acabó la vida
+DEF RIVALB_MUTED    EQU 1       ; su instrumento está callado (falló)
+DEF RIVALB_FINISHED EQU 2       ; ya terminó (está en resultados): el puntaje es el final
 
 DEF LINK_SEARCH EQU 0
 DEF LINK_OK     EQU 1
@@ -48,9 +54,11 @@ DEF LINK_CALL       EQU 24      ; cuadros llamando como maestro (el saludo del o
 DEF LINK_TO_MENU    EQU 60      ; cuadros con "CONECTADO" en pantalla antes de pasar al menú
 DEF LINK_TIMEOUT    EQU 120     ; cuadros sin oír al otro para dar la conexión por perdida
 DEF LINK_REFRESH    EQU 8       ; cuadros entre dos MSG_MENU aunque nada cambie (si uno se pierde, el siguiente lo repara)
-DEF LINK_COUNTDOWN  EQU 30      ; cuadros desde que el jugador 1 da la salida hasta que los dos empiezan
-DEF LINK_DEADLINE   EQU 12      ; cuadros antes del final en que el 1 decide si el 2 tiene la cuenta (ver LinkWaitFrame):
-                                ; antes, ~5 confirmaciones del 2; después, ~4 cuentas nuevas si la vuelve a empezar
+DEF LINK_COUNTDOWN  EQU 45      ; cuadros desde que el jugador 1 da la salida hasta que los dos empiezan
+DEF LINK_DEADLINE   EQU 15      ; cuadros antes del final en que el 1 decide si el 2 tiene la cuenta (ver LinkWaitFrame):
+                                ; antes, ~10 cuentas y confirmaciones; después, ~5 cuentas nuevas si la vuelve a empezar
+DEF LINK_SET0_FRESH EQU 4       ; un MSG_SET 0 de hace a lo más estos cuadros dice que el 2 sigue sin cuenta (sin
+                                ; cuenta, el 2 lo repite cada ~3 cuadros; con cuenta, deja de mandarlo)
 
 DEF LINK_ROW_STATUS EQU 8
 
@@ -158,6 +166,13 @@ LinkSend:
     ld e, a
     ret
 
+; Tira lo que queda por mandar. Un mensaje a medias se corta solo: el siguiente tipo lo descarta del otro lado.
+LinkOutClear:
+    di
+    ldh a, [hLinkOutW]
+    ldh [hLinkOutR], a
+    reti                        ; (ret con ei)
+
 ; Z = 1 si no queda nada por mandar
 LinkOutEmpty:
     ldh a, [hLinkOutW]
@@ -233,9 +248,21 @@ LinkCall:
 ; Bucle principal, antes del manejador del estado, mientras el cable está encendido
 LinkTick:
     call LinkPoll
+    call LinkScoreTick
     ld a, [wLinkState]
     cp LINK_OK
     ret nz
+    ; si llega un saludo estando conectados, el otro sigue buscando (no completó el nuestro): se le contesta
+    ld hl, wLinkGot
+    bit GOTB_HELLO, [hl]
+    jr z, .noHello
+    res GOTB_HELLO, [hl]
+    call LinkOutEmpty
+    jr nz, .noHello
+    ld hl, HelloMsg
+    ld b, HelloMsgEnd - HelloMsg
+    call LinkSend
+.noHello:
     ld hl, wLinkHeard
     ld a, [hl]
     ld [hl], 0
@@ -258,6 +285,146 @@ LinkTick:
     jp z, EnterTitle
     cp STATE_LINK
     jp z, EnterTitle
+    ret
+
+; Jugando y en resultados: desempaca el puntaje del otro cuando llega y manda el propio cada vez que la cola se vacía
+; (unas 10 veces por segundo)
+LinkScoreTick:
+    ld hl, wLinkGot
+    bit GOTB_SCORE, [hl]
+    jr z, .send
+    res GOTB_SCORE, [hl]
+    ld hl, wRivalMsg            ; tres bytes de dos dígitos (0 a 99) y las banderas
+    ld de, wRivalDigits
+    ld b, 3
+.unpack:
+    ld a, [hl+]
+    ld c, 0
+.tens:
+    cp 10
+    jr c, .ones
+    sub 10
+    inc c
+    jr .tens
+.ones:
+    push af
+    ld a, c
+    ld [de], a
+    inc de
+    pop af
+    ld [de], a
+    inc de
+    dec b
+    jr nz, .unpack
+    ld a, [hl]
+    ld [wRivalFlags], a
+    ld a, 1
+    ld [wRivalDirty], a
+    ld hl, wHudDirty
+    set 3, [hl]
+.send:
+    ld a, [wState]
+    ld c, 0
+    cp STATE_PLAY
+    jr z, .build
+    ld c, 1 << RIVALB_FINISHED
+    cp STATE_RESULTS
+    jr z, .build
+    cp STATE_INITIALS
+    ret nz
+.build:
+    call LinkOutEmpty
+    ret nz
+    ld a, [wFailed]
+    and a
+    jr z, .notFailed
+    set RIVALB_FAILED, c
+.notFailed:
+    ld a, [wMuted]
+    and a
+    jr z, .notMuted
+    set RIVALB_MUTED, c
+.notMuted:
+    ld hl, wMenuMsg
+    ld a, MSG_SCORE
+    ld [hl+], a
+    ld de, wScoreDigits
+    ld b, 3
+.pack:
+    ld a, [de]                  ; decenas * 10 (con [hl] de apoyo) + unidades
+    inc de
+    add a
+    ld [hl], a
+    add a
+    add a
+    add [hl]
+    ld [hl], a
+    ld a, [de]
+    inc de
+    add [hl]
+    ld [hl+], a
+    dec b
+    jr nz, .pack
+    ld [hl], c
+    ld hl, wMenuMsg
+    ld b, LINK_SCORE_LEN + 1
+    jp LinkSend
+
+; Z = 1 si hay una partida de VS por cable
+LinkIsVs:
+    ldh a, [hLinkOn]
+    and a
+    jr z, .no
+    ld a, [wPlayers]
+    cp 1
+    ret
+.no:
+    inc a
+    ret
+
+; PlayFrame: carry = 1 si la partida de VS debe cortarse porque alguien perdió (con fallo activado)
+LinkVsCut:
+    call LinkIsVs
+    jr nz, .no
+    ld a, [wRivalFlags]
+    and 1 << RIVALB_FAILED
+    ld b, a
+    ld a, [wFailed]
+    or b
+    jr z, .no
+    ld a, 1
+    ld [wVsCut], a
+    scf
+    ret
+.no:
+    and a
+    ret
+
+; PlayFrame: A = NR51; si el otro está fallando con otro instrumento, también se calla su canal
+LinkMuteRival:
+    ld b, a
+    ldh a, [hLinkOn]
+    and a
+    jr z, .keep
+    ld a, [wRivalFlags]
+    bit RIVALB_MUTED, a
+    jr z, .keep
+    ld a, [wInstrument]
+    ld c, a
+    ld a, [wPeerMenu + 1]
+    cp c
+    jr z, .keep                 ; (el mismo instrumento: su canal es el propio)
+    cp 4
+    jr nc, .keep
+    ld e, a
+    ld d, 0
+    ld hl, InstrNr51Muted
+    add hl, de
+    ld a, b
+    and [hl]
+    ret
+.keep:
+    ld a, b
     ret
 
 ; El maestro manda el siguiente byte; luego se leen los que llegaron. Cada mensaje completo se copia a su variable y
@@ -374,7 +541,7 @@ LinkPoll:
 
 ; Bytes de datos de cada tipo de mensaje (sin la suma de comprobación), desde MSG_HELLO
 LinkLens:
-    db LINK_HELLO_LEN, LINK_MENU_LEN, 1, 1, 1
+    db LINK_HELLO_LEN, LINK_MENU_LEN, 1, 1, 1, LINK_SCORE_LEN
 LinkLensEnd:
 ; A dónde se copian sus datos y qué bit encienden en wLinkGot
 LinkDest:
@@ -388,6 +555,8 @@ LinkDest:
     db 1 << GOTB_SET
     dw wPeerGo
     db 1 << GOTB_GO
+    dw wRivalMsg
+    db 1 << GOTB_SCORE
 
 HelloMsg:
     db MSG_HELLO, LINK_VERSION, SONG_LIST_HASH & $7F, (SONG_LIST_HASH >> 7) & $7F
@@ -909,6 +1078,15 @@ StartSongLink:
     ld [wPeerMenu + 3], a       ; el otro deja de estar "listo" hasta que lo vuelva a decir
     ld [wOptSpeed], a           ; a velocidad normal y sin práctica: si no, las consolas se desincronizan
     ld [wOptPractice], a
+    ld [wRivalFlags], a         ; el otro empieza en ceros
+    ld [wRivalDirty], a
+    ld [wVsCut], a
+    ld hl, wRivalDigits
+    ld b, 6
+.zero:
+    ld [hl+], a
+    dec b
+    jr nz, .zero
     ld a, $FF
     ld [wMenuSent], a
     ld a, [wLinkGot]
@@ -916,13 +1094,227 @@ StartSongLink:
     ld [wLinkGot], a
     jp StartSong
 
+; ---- Resultados de VS ---------------------------------------------------------------------------------------------
+; Fila 7: el puntaje del otro; fila 16: quién ganó. Hasta que llega el puntaje final del otro, "ESPERANDO A J2...".
+DEF VS_ROW_RIVAL EQU 7
+DEF VS_ROW_LINE  EQU 16
+
+TxtRivalLbl: db "PUNTOS J", 0
+TxtVsWait:   db "ESPERANDO A J", 0
+TxtVsWins:   db "GANA J", 0
+TxtVsBy:     db " POR ", 0
+TxtVsDash:   db " - J", 0
+TxtVsLost:   db " PERDIO", 0
+TxtVsTie:    db "       EMPATE", 0
+
+; EnterResults (LCD apagado): el renglón del otro y la línea de VS
+ResultsVsDraw:
+    ld de, _SCRN0 + 32 * VS_ROW_RIVAL + 1
+    ld hl, TxtRivalLbl
+    call PrintStr
+    call VsNumbers
+    ld a, c
+    ld [de], a
+    ld de, _SCRN0 + 32 * VS_ROW_RIVAL + 12
+    ld hl, wRivalDigits
+    ld b, 6
+    call PrintDigits
+    xor a
+    ld [wRivalDirty], a
+    call VsBuildLine
+    ld hl, wPeerLine
+    ld de, _SCRN0 + 32 * VS_ROW_LINE
+    ld b, 20
+    jp CopyToMap
+
+; ResultsFrame: si llegó otro puntaje del otro, se vuelven a encolar su renglón y la línea
+ResultsVsUpdate:
+    ld a, [wRivalDirty]
+    and a
+    ret z
+    xor a
+    ld [wRivalDirty], a
+    ld hl, wRivalDigits
+    ld de, _SCRN0 + 32 * VS_ROW_RIVAL + 12
+    ld b, 6
+    call QueueDigits
+    call VsBuildLine
+    ld hl, wPeerLine
+    ld de, _SCRN0 + 32 * VS_ROW_LINE
+    ld b, 20
+    jp QueueRaw
+
+; B = el número de esta consola ('1' o '2') y C = el del otro
+VsNumbers:
+    ldh a, [hLinkMaster]
+    and a
+    ld bc, ('1' << 8) | '2'
+    ret nz
+    ld bc, ('2' << 8) | '1'
+    ret
+
+; Arma en wPeerLine (20 caracteres) quién ganó: si alguien perdió (se le acabó la vida), gana el otro; si no, el de más
+; puntos ("GANA J1 POR 001230") o "EMPATE".
+VsBuildLine:
+    ld hl, wPeerLine
+    ld b, 20
+    ld a, ' '
+.fill:
+    ld [hl+], a
+    dec b
+    jr nz, .fill
+    call VsNumbers
+    ld de, wPeerLine
+    ld a, [wRivalFlags]
+    bit RIVALB_FINISHED, a
+    jr nz, .final
+    ld hl, TxtVsWait            ; "ESPERANDO A J2..."
+    call VsPut
+    ld a, c
+    ld [de], a
+    inc de
+    ld a, '.'
+    ld [de], a
+    inc de
+    ld [de], a
+    inc de
+    ld [de], a
+    ret
+.final:
+    ld a, [wRivalFlags]
+    and 1 << RIVALB_FAILED
+    ld h, a                     ; H = el otro perdió
+    ld a, [wFailed]
+    and a
+    jr z, .meAlive
+    ld a, h
+    and a
+    jr nz, .byScore             ; perdieron los dos: decide el puntaje
+    ld a, c                     ; esta consola perdió: gana el otro
+    ld c, b
+    ld b, a
+    jr .lostLine
+.meAlive:
+    ld a, h
+    and a
+    jr z, .byScore
+.lostLine:
+    ; B = el que ganó, C = el que perdió: "GANA J1 - J2 PERDIO"
+    ld hl, TxtVsWins
+    call VsPut
+    ld a, b
+    ld [de], a
+    inc de
+    ld hl, TxtVsDash
+    call VsPut
+    ld a, c
+    ld [de], a
+    inc de
+    ld hl, TxtVsLost
+    jp VsPut
+.byScore:
+    push bc
+    call VsCompare              ; (usa DE: la línea se vuelve a escribir desde el principio)
+    pop bc
+    ld de, wPeerLine
+    jr nz, .notTie
+    ld hl, TxtVsTie
+    jp VsPut
+.notTie:
+    jr c, .rivalWins
+    ld hl, TxtVsWins            ; gana esta consola: la diferencia es el propio menos el del otro
+    call VsPut
+    ld a, b
+    ld [de], a
+    ld hl, wScoreDigits
+    ld de, wRivalDigits
+    jr .by
+.rivalWins:
+    ld hl, TxtVsWins
+    call VsPut
+    ld a, c
+    ld [de], a
+    ld hl, wRivalDigits
+    ld de, wScoreDigits
+.by:
+    push hl
+    push de
+    ld hl, TxtVsBy
+    ld de, wPeerLine + 7
+    call VsPut
+    pop de
+    pop hl
+    ; (sigue en VsDiff)
+
+; Escribe HL - DE (6 dígitos, HL el mayor) como caracteres en wPeerLine + 12
+VsDiff:
+    push de
+    ld de, wPeerLine + 12
+    ld b, 6
+.copy:
+    ld a, [hl+]
+    ld [de], a
+    inc de
+    dec b
+    jr nz, .copy
+    pop de
+    ld hl, 5
+    add hl, de
+    ld d, h
+    ld e, l                     ; DE = último dígito del menor
+    ld hl, wPeerLine + 17
+    ld bc, $0600                ; B = dígitos, C = lo que se pide prestado
+.sub:
+    ld a, [de]
+    add c
+    ld c, a
+    ld a, [hl]
+    sub c
+    ld c, 0
+    jr nc, .digit
+    add 10
+    ld c, 1
+.digit:
+    add '0'
+    ld [hl-], a
+    dec de
+    dec b
+    jr nz, .sub
+    ret
+
+; Z = 1 si los dos puntajes son iguales; si no, carry = 1 si el propio es menor
+VsCompare:
+    ld hl, wScoreDigits
+    ld de, wRivalDigits
+    ld b, 6
+.loop:
+    ld a, [de]
+    ld c, a
+    ld a, [hl]
+    cp c
+    ret nz
+    inc hl
+    inc de
+    dec b
+    jr nz, .loop
+    ret
+
+; Copia la cadena terminada en 0 de HL a DE (deja DE después de lo copiado)
+VsPut:
+    ld a, [hl+]
+    and a
+    ret z
+    ld [de], a
+    inc de
+    jr VsPut
+
 ; ---- Arranque sincronizado ----------------------------------------------------------------------------------------
 ; Cada consola tarda distinto en preparar la canción con el LCD apagado (la CGB limpia dos bancos de VRAM), así que
 ; BeginPlay no la echa a andar: espera aquí con la autopista en pantalla. El jugador 1 repite MSG_START hasta que el 2
 ; contesta MSG_SET 0 (ya preparó la suya); entonces cuenta LINK_COUNTDOWN cuadros y repite MSG_GO con los que faltan.
 ; El 2 toma la cuenta del último que le llegó y contesta MSG_SET 1 mientras cuenta (y MSG_SET 0 mientras no la tiene).
-; Los dos echan a andar la canción al llegar a 0. A LINK_DEADLINE cuadros del final, si lo último que el 1 oyó del 2 fue
-; MSG_SET 0 (no le ha llegado la cuenta), la vuelve a empezar; el 2 nunca empieza sin cuenta, así que nadie arranca solo.
+; Los dos echan a andar la canción al llegar a 0. A LINK_DEADLINE cuadros del final, si el 2 nunca confirmó y hace muy
+; poco dijo MSG_SET 0 (sigue sin cuenta), el 1 la vuelve a empezar; el 2 nunca empieza sin cuenta.
 LinkWaitFrame:
     di
     xor a
@@ -941,14 +1333,20 @@ LinkWaitFrame:
     jr nz, .take
     inc a
 .take:
+    ld b, a
+    ld a, [wLinkStarting]
+    and a
+    ld a, b
     ld [wLinkStarting], a
+    ; con la primera cuenta, lo que quedaba por mandar (un MSG_SET 0) ya no vale: se tira y se confirma enseguida
+    call z, LinkOutClear
 .noGo:
     ld a, [wLinkStarting]
     and a
     jr z, .slaveReply
     dec a
     ld [wLinkStarting], a
-    jr z, .play
+    jp z, .play
 .slaveReply:
     call LinkOutEmpty           ; MSG_SET: 0 = ya preparé la canción, 1 = ya tengo la cuenta
     ret nz
@@ -970,13 +1368,24 @@ LinkWaitFrame:
     jr nz, .ack
     ld a, LINK_COUNTDOWN        ; el 2 ya preparó la canción: empieza la cuenta
     ld [wLinkStarting], a
-    ld a, $FF                   ; todavía no se sabe si le llegó
+    xor a                       ; todavía no confirma que le llegó (y acaba de decir que no la tiene)
     ld [wLinkAcked], a
+    ld [wLinkSet0Age], a
     ret
 .ack:
-    ld a, [wPeerSet]            ; lo último que dijo el 2: 0 = sin cuenta, 1 = con cuenta
+    ld a, [wPeerSet]            ; 1 = el 2 tiene la cuenta (ya no se olvida en esta cuenta)
+    and a
+    jr z, .set0
     ld [wLinkAcked], a
+    jr .noSet
+.set0:
+    ld [wLinkSet0Age], a        ; 0 = el 2 acaba de decir que no la tiene
 .noSet:
+    ld hl, wLinkSet0Age         ; cuadros desde el último MSG_SET 0 (se queda en 255)
+    inc [hl]
+    jr nz, .aged
+    dec [hl]
+.aged:
     ld a, [wLinkStarting]
     and a
     jr nz, .count
@@ -992,13 +1401,17 @@ LinkWaitFrame:
     jr z, .play
     cp LINK_DEADLINE
     jr nz, .repeatGo
-    ld a, [wLinkAcked]          ; lo último del 2 fue "sin cuenta": vuelve a empezarla
+    ; el 2 no confirmó y hace poco dijo que no tiene la cuenta: se vuelve a empezar. (Si no dijo nada en un rato, lo
+    ; más probable es que ya la tenga y se hayan perdido sus confirmaciones: se sigue.)
+    ld a, [wLinkAcked]
     and a
     jr nz, .repeatGo
+    ld a, [wLinkSet0Age]
+    cp LINK_SET0_FRESH + 1
+    jr nc, .repeatGo
     ld a, LINK_COUNTDOWN
     ld [wLinkStarting], a
-    ld a, $FF
-    ld [wLinkAcked], a
+    call LinkOutClear           ; la cuenta vieja que iba saliendo ya no vale: la nueva sale enseguida
 .repeatGo:
     ; repite la cuenta cada vez que se vacía la cola. Si aquí faltan K cuadros, el mensaje termina de salir (con su suma
     ; de comprobación) en el LinkPoll de dentro de 3 cuadros, cuando falten K - 3; el 2 lo atiende en ese mismo cuadro y

@@ -97,6 +97,8 @@ Start:
     xor a
     ldh [rVBK], a
 .tiles:
+    ld a, BANK(Tiles)
+    call SwitchBank
     ld hl, _VRAM
     ld de, Tiles
     ld bc, TilesEnd - Tiles
@@ -223,10 +225,19 @@ INCLUDE "records.asm"
 INCLUDE "link.asm"
 
 ; ---- Gráficos: todos los tiles juntos (build/chr/tiles.2bpp, ver `gbband build-gfx`) -----------------
-SECTION "Tiles", ROM0
+; En el banco 1 (los bancos 1 a 15 están libres: las canciones empiezan en el 16): solo se copian a la VRAM al arrancar.
+SECTION "Tiles", ROMX, BANK[1]
 Tiles:
     INCBIN "chr/tiles.2bpp"
 TilesEnd:
+
+; El reflector encendido y apagado se copian a la VRAM con cada tiempo de la partida (con el banco de la canción
+; puesto), así que esos dos tiles también van en ROM0
+SECTION "Tiles del reflector", ROM0
+LampOnTile:
+    INCBIN "chr/tiles.2bpp", TILE_LAMP * 16, 16
+LampOffTile:
+    INCBIN "chr/tiles.2bpp", TILE_LAMP_OFF * 16, 16
 
 ; ---- Canciones (bancos 16 en adelante): build/list.asm la genera `gbband list-songs` -------------------
 INCLUDE "list.asm"
