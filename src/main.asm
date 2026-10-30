@@ -27,8 +27,8 @@ SECTION "Vec Timer", ROM0[$0050]
     ds $08 - 1, $FF
 
 SECTION "Vec Serie", ROM0[$0058]
-    reti
-    ds $08 - 1, $FF
+    jp SerialISR
+    ds $08 - 3, $FF
 
 SECTION "Vec Control", ROM0[$0060]
     reti
@@ -158,7 +158,7 @@ MainLoop:
 
 ; Un manejador por estado, en el orden de STATE_...
 StateTable:
-    dw TitleFrame, MenuFrame, PlayFrame, PauseFrame, ResultsFrame, InitialsFrame, OptionsFrame
+    dw TitleFrame, MenuFrame, PlayFrame, PauseFrame, ResultsFrame, InitialsFrame, OptionsFrame, LinkFrame
 
 ; ---- Utilidades --------------------------------------------------------------
 
@@ -217,6 +217,7 @@ INCLUDE "options.asm"
 INCLUDE "practice.asm"
 INCLUDE "results.asm"
 INCLUDE "records.asm"
+INCLUDE "link.asm"
 
 ; ---- Gráficos: todos los tiles juntos (build/chr/tiles.2bpp, ver `gbband build-gfx`) -----------------
 SECTION "Tiles", ROM0

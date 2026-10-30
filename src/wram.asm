@@ -167,6 +167,16 @@ wHudDirty::     ds 1
 wQSrc::         ds 2
 wQDigit::       ds 1
 wTitleBlink::   ds 1     ; bit 5 de hFrame la última vez que se dibujó "PRESIONA START" (parpadea cada 32 cuadros)
+wPlayers::      ds 1     ; JUGADORES del título: 0 uno, 1 VS, 2 Co-Op
+
+; --- cable link (ver link.asm) ---
+wLinkState::    ds 1     ; LINK_SEARCH, LINK_OK o LINK_WRONG
+wLinkTimer::    ds 1     ; cuadros que le quedan al papel de la búsqueda (esperar o llamar)
+wLinkHeard::    ds 1     ; 1 = llegó algo del otro lado desde la última vez que se miró (no cambia de papel)
+wLinkType::     ds 1     ; mensaje que se está recibiendo (0 = ninguno)
+wLinkPos::      ds 1     ; bytes de datos recibidos de ese mensaje
+wLinkBuf::      ds LINK_MAX_DATA
+wLinkPeer::     ds LINK_HELLO_LEN   ; el saludo del otro: versión y hash de la lista de canciones (dos bytes de 7 bits)
 
 ; --- opciones (seis valores seguidos: el índice del renglón de la pantalla de opciones indexa wOpt) ---
 wOpt::
@@ -222,6 +232,12 @@ wCrowdBuf::     ds 5
 
 wVQDummy::      ds 128   ; destino inofensivo cuando la cola se llena
 
+; Colas del cable link: 16 bytes cada una en un bloque de 32 alineado, así el índice es el byte bajo de la dirección
+; y da la vuelta con `and $0F` sin acarreo. hLinkInW/hLinkOutR los mueve la ISR serie; hLinkInR/hLinkOutW, el bucle.
+SECTION "WRAM cable link", WRAM0, ALIGN[5]
+wLinkIn::       ds 16
+wLinkOut::      ds 16
+
 ; ---- HRAM --------------------------------------------------------------------
 SECTION "HRAM", HRAM
 hIsCGB::     ds 1        ; valor de A al arrancar: $11 en Game Boy Color; en DMG es otro ($01 en la DMG original)
@@ -240,3 +256,9 @@ hPassLY::    ds 1
 hScx::       ds 1        ; SCX de la autopista (el temblor al fallar)
 hPalFx::     ds 1        ; 1 = la ISR pone el tinte rojo, 2 = vuelve a lo normal, 0 = nada
 hOamDma::    ds 10       ; copia de la rutina de OAM DMA (corre desde HRAM)
+hLinkOn::    ds 1        ; 1 = el cable está en uso (el esclavo se vuelve a armar en la ISR serie)
+hLinkMaster:: ds 1       ; 1 = esta consola da el reloj (jugador 1)
+hLinkInW::   ds 1        ; byte bajo de la dirección en wLinkIn / wLinkOut
+hLinkInR::   ds 1
+hLinkOutW::  ds 1
+hLinkOutR::  ds 1

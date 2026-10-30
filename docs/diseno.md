@@ -107,6 +107,59 @@ NSF --> cpu6502.py + nsf.py (APU) -------------+             +--> gbaudio.py -->
   el título, el juego y los instrumentos disponibles. El instrumento elegido decide qué chart se juega y qué canal del APU se
   calla al fallar (CH1 guitarra, CH2 teclado, CH3 bajo, CH4 batería).
 
+## 2 jugadores por cable link (fase 5, en curso)
+
+A diferencia de NESBand (pantalla dividida en una consola), aquí **cada jugador tiene su consola, su cartucho y su pantalla
+completa**: cada Game Boy corre su propia partida con su autopista, y el cable solo lleva lo necesario para sincronizar y
+compartir el marcador. No hace falta dividir la pantalla ni encoger los carriles.
+
+**Conexión (hecha).** En el título, el renglón JUGADORES (`1 JUGADOR`, `2 JUG. VS`, `2 JUG. COOP`, con ←/→; el menú ya no
+tiene lugar para otro renglón). Con 2, Start abre la pantalla de conexión (`link.asm`), que busca al otro hasta que B la
+cancela. Cada byte del cable es parte de un mensaje: el tipo lleva el bit 7 en 1 y los datos (7 bits) en 0; `$00` es "nada
+que mandar" y `$FF` lo que se lee sin nadie del otro lado, y los dos se ignoran entre mensajes. Para repartir papeles,
+cada consola espera como esclavo (reloj externo) un rato al azar y, si nadie la llamó, llama como maestro (reloj interno);
+mientras busca repite su saludo (`MSG_HELLO`: versión del protocolo y hash de 14 bits de la lista de canciones, que
+`list-songs` deja en `SONG_LIST_HASH`). Quien recibe el saludo completo del otro queda conectado con el papel que tenía:
+el maestro es el **jugador 1**. Si el saludo no coincide, sale `CANCIONES DISTINTAS`. El maestro manda un byte por cuadro
+desde el bucle principal y el esclavo arma el siguiente en la ISR serie en cuanto llega uno.
+
+**Menú.** El maestro elige canción (y en VS la dificultad, como en NESBand); cada quien elige su instrumento y dificultad en
+su propia consola. En Co-Op no pueden tocar el mismo instrumento; en VS el jugador 2 copia al 1 por defecto. Start en el
+maestro arranca cuando los dos están listos.
+
+**Arranque sincronizado.** El maestro manda `EMPIEZA` y las dos consolas empiezan la canción en el VBlank siguiente al fin
+de la transferencia. Los dos cristales difieren en unas ppm: en una canción de 4 minutos es menos de un cuadro. Cada cuadro
+viaja también el número de cuadro para detectar desfase (si pasa de 2 cuadros, el esclavo repite o salta uno).
+
+**Un paquete por cuadro.** El maestro inicia el intercambio en el bucle principal (no en la ISR de VBlank, que ya va justa;
+ver `wOverrun`); la interrupción serie (vector `$0058`, hoy un `reti`) solo guarda el byte recibido y manda el siguiente.
+A 8 KHz cada byte tarda ~1 ms, así que 4 a 6 bytes por cuadro cuestan menos del 10 % del cuadro y casi nada de CPU.
+
+- **VS:** cada consola manda su puntaje (3 bytes BCD) y banderas (vida baja, perdió, poder estelar activo, instrumento
+  callado). La pantalla muestra el puntaje del rival en la Window. Al final: `GANA J1 POR 001230`, `EMPATE` o, con fallo,
+  `GANA J2 - J1 PERDIO` (la partida se corta). Cada quien guarda su récord en su cartucho.
+- **Co-Op (banda):** el **maestro es la autoridad** del marcador de banda. El esclavo manda sus eventos del cuadro
+  (aciertos, fallos, frase estelar, pedir poder o revivir) y el maestro devuelve el estado de banda (puntaje, combo,
+  multiplicador, barra estelar). Así los dos ven lo mismo aunque el esclavo lo vea 1 cuadro tarde. La vida es de cada
+  quien; con media barra estelar, Select revive al caído. Récord de banda aparte, como en NESBand.
+- **Audio:** las dos consolas tocan la canción completa; cada una calla el canal del instrumento de quien esté fallando
+  (el suyo o el del compañero, que llega en las banderas).
+
+**Pruebas.** El cable de PyBoy no sirve para esto (su modo de memoria compartida necesita dos hilos que se esperan en
+cada byte, y el puerto normal siempre lee `$FF`), así que `linkbridge.py` corre dos PyBoy a la par, un cuadro cada uno, y
+pasa los bytes con hooks en `SerialSend`, `SerialArm`, `SerialOff` y `SerialGot`. El esclavo recibe hasta un cuadro tarde;
+el protocolo no depende de eso. `tests/test_link.py` prueba la conexión con distintos tiempos de entrada, dos CGB que entran
+en el mismo cuadro, cartuchos con canciones distintas y una consola sola. Falta probarlo a mano en SameBoy o BGB con dos
+ventanas y con dos consolas de verdad (hasta entonces, **probado solo en emulador**).
+
+**Orden:**
+
+1. ~~Controlador serie, saludo y puente de dos PyBoy en las pruebas (pantalla de conexión).~~ Hecho.
+2. Del saludo al menú, elección de canción por el maestro y arranque sincronizado.
+3. VS completo (puntaje del rival, resultados, corte al perder).
+4. Co-Op completo (marcador de banda, revivir, récord de banda).
+5. Documentación y prueba a mano en emulador con dos ventanas.
+
 ## Estado actual
 
 - **Fase 1** (esqueleto): ROM "hola mundo", herramientas y pruebas. Hecha.
