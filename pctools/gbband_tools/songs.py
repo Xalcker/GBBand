@@ -300,6 +300,13 @@ def tracked_songs(root: Path = ROOT) -> set[str]:
     return {m.group(1) for line in out.splitlines() if (m := re.fullmatch(r"src/songs/([^/]+)/song\.asm", line))}
 
 
+def song_list_hash(names: list[str]) -> int:
+    """Hash de 14 bits de la lista de canciones (nombres y orden), para comparar los cartuchos por el cable link."""
+    import zlib
+
+    return zlib.crc32("\n".join(names).encode("utf-8")) & 0x3FFF
+
+
 def list_songs(solo: list[str] | None = None, release: bool = False, root: Path = ROOT) -> list[str]:
     """Escribe build/list.asm con las canciones de src/songs/*/song.asm (orden alfabético; el lugar de cada una en
     la lista es su slot). `solo` son patrones (como -Solo de build.ps1) y `release` deja solo las versionadas en git."""
@@ -330,6 +337,8 @@ def list_songs(solo: list[str] | None = None, release: bool = False, root: Path 
     (root / "build").mkdir(exist_ok=True)
     # lo que el código necesita saber antes de incluir la lista (se incluye al principio de main.asm)
     defs = ["; Generado por `gbband list-songs`"] + ([f"DEF HAS_TITLE_MUSIC EQU 1", f"DEF TITLE_BANK EQU {TITLE_BANK}"] if has_title else [])
+    # para el cable link: las dos consolas deben tener las mismas canciones en el mismo orden (14 bits: 2 bytes de 7)
+    defs.append(f"DEF SONG_LIST_HASH EQU ${song_list_hash(names):04X}")
     write_lf(root / "build" / "list_defs.inc", "\n".join(defs) + "\n")
     write_lf(root / "build" / "list.asm", "\n".join(lines) + "\n")
     return names
