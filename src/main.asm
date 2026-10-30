@@ -43,7 +43,18 @@ SECTION "Header", ROM0[$0100]
 ; ---- Arranque ---------------------------------------------------------------
 SECTION "Arranque", ROM0[$0150]
 Start:
-    ldh [hIsCGB], a             ; A vale $11 al arrancar en CGB: guardarlo antes de tocar A
+    di
+    ; La HRAM arranca con basura en consolas reales (y en SameBoy; PyBoy la deja en ceros): limpiarla toda antes de
+    ; usarla. Sin esto hScx, hLcdc y compañía empiezan con valores al azar y el título sale corrido o se congela.
+    ld b, a                     ; A vale $11 al arrancar en CGB: guardarlo antes de tocar A
+    ld c, $80                   ; HRAM: $FF80-$FFFE
+    xor a
+.clearHram:
+    ldh [c], a
+    inc c
+    jr nz, .clearHram           ; termina tras escribir $FFFF (IE = 0)
+    ld a, b
+    ldh [hIsCGB], a
     cp BOOT_A_CGB
     ld a, 0
     jr nz, .notCgb
