@@ -158,6 +158,8 @@ OamInit:
     ld [hl+], a
     dec b
     jr nz, .flames
+    ld [wErPend], a          ; ni gemas por borrar
+    ld [wErWait], a
     ld [wHeld], a
     cpl
     ld [wHeldPrev], a        ; distinto de wHeld: fuerza a UpdateOam a escribirlo todo

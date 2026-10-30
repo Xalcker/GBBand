@@ -152,6 +152,12 @@ wTryBit::       ds 1
 wTryLane::      ds 1     ; carril que se está probando (para la llamarada)
 wFlame::        ds NUM_LANES ; cuadros que le quedan a la llamarada de cada carril (0 = sin llamarada)
 wFlameAttr::    ds NUM_LANES ; atributos de su sprite (fuego normal o azul del poder estelar)
+wErPend::       ds 1     ; carriles con una gema acertada por borrar del fondo
+wErWait::       ds 1     ; cuadros seguidos sin poder borrar (la cola de VRAM estaba llena)
+wErRow::        ds NUM_LANES ; fila del fondo (0-31) de la gema por borrar
+wErOff::        ds NUM_LANES ; su desplazamiento (0 = cabe en una fila; si no, también ocupa la de abajo)
+wErAttr::       ds 1     ; atributos del par de tiles que se escribe
+wErSus::        ds NUM_LANES ; 1 = la nota tiene cola: su fila se rellena con la cola en vez del carril vacío
 wScanI::        ds 1
 wScanE::        ds 1
 wHeldPrev::     ds 1

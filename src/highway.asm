@@ -691,3 +691,181 @@ QueuePatch:
     ld [hl+], a
     ld [hl], a
     ret
+
+; ---- Borrar la gema acertada -----------------------------------------------------------------
+; Al acertar, la gema se quita del fondo para que se note. Su fila sale igual que al dibujarla (FetchNote), con el cuadro de
+; la nota por la velocidad (MulFrames), así que se borran justo sus tiles: los 2 de su carril en su fila y, si tiene
+; desplazamiento, los 2 de la fila de abajo. Se escribe un carril por cuadro y solo si la cola de VRAM del cuadro va
+; ligera (ERASE_QMAX): un acorde se borra en 2 o 3 cuadros, pero el VBlank no pasa de su peor caso. En la batería no se
+; borra: el bombo es una barra que cruza la fila y le quedaría un hueco.
+
+; Desde TryHit: la gema de la entrada wScanE en el carril wTryLane queda pendiente de borrar.
+GemEraseStart:
+    ld a, [wInstrument]
+    cp 3
+    ret z
+    ld a, [wScanE]
+    ld e, a
+    ld d, 0
+    ld hl, wJQFLo
+    add hl, de
+    ld a, [hl]
+    ld [wMulF], a
+    ld hl, wJQFHi
+    add hl, de
+    ld a, [hl]
+    ld [wMulF + 1], a
+    ld hl, wJQSus
+    add hl, de
+    ld a, [hl]
+    and a
+    jr z, .sus
+    ld a, 1
+.sus:
+    push af
+    call MulFrames          ; wMulR = cuadro * velocidad (8.8)
+    ld hl, wMulR            ; V = HIT_Y*256 - wMulR, redondeado como en FetchNote
+    ld a, LOW(HIT_Y * 256)
+    sub [hl]
+    inc hl
+    ld a, HIGH(HIT_Y * 256)
+    sbc [hl]
+    add ROUND_HI            ; (el byte alto no hace falta: la fila va módulo 32)
+IF PLACEMENT_B
+    ld e, a
+    and %110
+ELSE
+    ld e, a
+    xor a
+ENDC
+    ld c, a                 ; C = desplazamiento
+    ld a, e
+    rrca                    ; fila = (V >> 3) & 31: sale entera del byte medio
+    rrca
+    rrca
+    and 31
+    ld b, a                 ; B = fila
+    ld a, [wTryLane]
+    ld e, a
+    ld d, 0
+    ld hl, wErRow
+    add hl, de
+    ld [hl], b
+    ld hl, wErOff
+    add hl, de
+    ld [hl], c
+    pop af
+    ld hl, wErSus
+    add hl, de
+    ld [hl], a
+    ld hl, LaneBit
+    add hl, de
+    ld a, [wErPend]
+    or [hl]
+    ld [wErPend], a
+    ret
+
+; Cada cuadro, al final: borra la gema pendiente del carril más bajo si la cola de VRAM tiene lugar.
+GemEraseFrame:
+    ld a, [wErPend]
+    and a
+    ret z
+    ld a, [wVQLen]
+    cp ERASE_QMAX + 1
+    jr c, .room
+    ld hl, wErWait
+    inc [hl]
+    ld a, [hl]
+    cp ERASE_WAIT
+    ret c
+    xor a                   ; demasiado tiempo sin lugar: la fila podría volver a armarse; se olvidan
+    ld [hl], a
+    ld [wErPend], a
+    ret
+.room:
+    xor a
+    ld [wErWait], a
+    ld a, [wErPend]
+    ld b, 0
+    ld c, 1
+.find:
+    rrca
+    jr c, .found
+    inc b
+    sla c
+    jr .find
+.found:
+    ld a, c
+    cpl
+    ld hl, wErPend
+    and [hl]
+    ld [hl], a
+    ld a, b
+    ld [wPLane], a
+    ld e, b
+    ld d, 0
+    ld hl, wErOff
+    add hl, de
+    ld a, [hl]
+    push af                 ; desplazamiento
+    ld hl, wErRow
+    add hl, de
+    ld a, [hl]
+    push af                 ; fila
+    ld hl, wErSus
+    add hl, de
+    ld a, [hl]
+    and a
+    ld bc, TILE_LANE_L * 256 + TILE_LANE_R
+    ld a, 0                 ; carril vacío: paleta 0
+    jr z, .attr
+    ld bc, TILE_TAIL_L * 256 + TILE_TAIL_R
+    ld a, [wPLane]          ; la cola: paleta del carril
+    inc a
+.attr:
+    ld [wErAttr], a
+    pop af
+    push af
+    call ErasePair
+    pop af
+    ld b, a
+    pop af
+    and a
+    ret z
+    xor a                   ; la parte de abajo: carril vacío
+    ld [wErAttr], a
+    ld a, b
+    inc a
+    ld bc, TILE_LANE_L * 256 + TILE_LANE_R
+    ; (sigue en ErasePair)
+
+; A = fila del fondo, B y C = tiles izquierdo y derecho, wPLane = carril, wErAttr = atributos (CGB)
+ErasePair:
+    push bc
+    call RowDest
+    ld a, [wPLane]
+    add a
+    ld e, a
+    ld d, 0
+    add hl, de              ; + 2 * carril
+    ld d, h
+    ld e, l
+    push de
+    ld b, 2
+    ld c, 0
+    call VQAlloc
+    pop de
+    pop bc
+    ld a, b
+    ld [hl+], a
+    ld [hl], c
+    ldh a, [hCGB]
+    and a
+    ret z
+    ld b, 2
+    ld c, $80
+    call VQAlloc
+    ld a, [wErAttr]
+    ld [hl+], a
+    ld [hl], a
+    ret
