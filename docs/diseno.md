@@ -186,8 +186,9 @@ puede tirar a propósito una parte de los bytes al azar (`drop_rate`) para proba
 `tests/test_link.py` prueba la conexión con distintos tiempos de entrada, dos CGB idénticas, cartuchos con canciones
 distintas, una consola sola, el menú de VS y de Co-Op en las combinaciones DMG/CGB, que uno se vaya y un cable que pierde
 el 10 y el 20 % de los bytes. A mano, con 20 semillas: con 5, 10 y 20 % de pérdida siempre se conectan y empiezan en el
-mismo cuadro; con 30 % (uno de cada tres bytes) a veces no. Falta probarlo en SameBoy o BGB con dos ventanas y con dos
-consolas de verdad (hasta entonces, **probado solo en emulador**). (Dos emuladores idénticos que entran en el mismo cuadro
+mismo cuadro; con 30 % (uno de cada tres bytes) a veces no. Se probó a mano en SameBoy con dos ventanas conectadas
+(funciona; ahí salió que la HRAM no se limpiaba al arrancar). Falta probarlo con dos consolas de verdad (hasta entonces,
+**probado solo en emulador**). (Dos emuladores idénticos que entran en el mismo cuadro
 no se desempatan nunca, porque hacen exactamente lo mismo; dos consolas reales nunca están en el mismo estado.)
 
 **Orden:**
@@ -196,8 +197,8 @@ no se desempatan nunca, porque hacen exactamente lo mismo; dos consolas reales n
 2. ~~Del saludo al menú, elección de canción por el jugador 1 y arranque sincronizado.~~ Hecho.
 3. ~~VS completo (puntaje del rival, resultados, corte al perder).~~ Hecho.
 4. ~~Co-Op completo (marcador de banda, revivir, récord de banda).~~ Hecho.
-5. ~~Documentación y guía para la prueba a mano (README, "Probar 2 jugadores a mano").~~ Hecho. Falta correrla en
-   SameBoy o BGB y en dos consolas de verdad.
+5. ~~Documentación y guía para la prueba a mano (README, "Probar 2 jugadores a mano").~~ Hecho y probado
+   en SameBoy con dos ventanas. Falta probarlo con dos consolas de verdad.
 
 ## Estado actual
 
