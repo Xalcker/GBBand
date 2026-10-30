@@ -175,7 +175,7 @@ wLinkTimer::    ds 1     ; cuadros que le quedan al papel de la búsqueda (esper
 wLinkHeard::    ds 1     ; 1 = llegó algo del otro lado desde la última vez que se miró (no cambia de papel)
 wLinkType::     ds 1     ; mensaje que se está recibiendo (0 = ninguno)
 wLinkPos::      ds 1     ; bytes de datos recibidos de ese mensaje
-wLinkBuf::      ds LINK_MAX_DATA
+wLinkBuf::      ds LINK_MAX_DATA + 1   ; (los datos y la suma de comprobación)
 wLinkPeer::     ds LINK_HELLO_LEN   ; el saludo del otro: versión y hash de la lista de canciones (dos bytes de 7 bits)
 wLinkGot::      ds 1     ; un bit por mensaje recibido y todavía no atendido (GOTB_...)
 wLinkSilence::  ds 1     ; cuadros seguidos sin oír al otro (conectados)
@@ -185,7 +185,7 @@ wPeerSet::      ds 1
 wPeerGo::       ds 1
 wPeerInstrSeen:: ds 1    ; el último instrumento del jugador 1 que el 2 copió (VS)
 wMenuSent::     ds LINK_MENU_LEN    ; el último estado propio que se mandó
-wMenuMsg::      ds LINK_MENU_LEN + 1
+wMenuMsg::      ds LINK_MAX_DATA + 1    ; el mensaje que se está armando (tipo y datos)
 wReady::        ds 1     ; 1 = este jugador dijo "listo" en el menú
 wLinkStarting:: ds 1     ; cuadros que faltan para echar a andar la canción (0 = todavía no hay cuenta regresiva)
 wMenuRefresh::  ds 1     ; cuadros para volver a mandar el estado del menú aunque no cambie
@@ -197,6 +197,23 @@ wRivalFlags::   ds 1     ; sus banderas (RIVALB_...)
 wRivalDirty::   ds 1     ; 1 = llegó un MSG_SCORE que los resultados todavía no muestran
 wVsCut::        ds 1     ; 1 = la partida de VS se cortó porque alguien perdió (no hay récord)
 wVsGame::       ds 1     ; 1 = esta partida es de VS por cable (lo fija BeginPlay: el marcador muestra al otro)
+
+; --- Co-Op (ver coop.asm) ---
+wCoopGame::     ds 1     ; 1 = esta partida es de Co-Op por cable (lo fija BeginPlay)
+wEvHitsA::      ds 1     ; el 2: aciertos del lote antes del último fallo
+wEvHitsB::      ds 1     ;       aciertos después del último fallo
+wEvPhrases::    ds 1     ;       frases estelares completas
+wEvTens::       ds 1     ;       decenas de puntos de las colas sostenidas
+wEvFlags::      ds 1     ;       EVB_MISS y EVB_SELECT del lote
+wEvTimer::      ds 1     ;       cuadros para mandar las banderas aunque no haya eventos
+wPeerEvents::   ds LINK_EVENTS_LEN  ; el 1: el último MSG_EVENTS del 2
+wPeerBand::     ds LINK_BAND_LEN    ; el 2: el último MSG_BAND del 1
+wReviveSeq::    ds 1     ; veces que el 1 revivió al 2 (en el 2: las que ya atendió)
+wBandFinal::    ds 1     ; el 2: ya llegó el estado final de la banda
+wCoopWaiting::  ds 1     ; resultados: esperando los datos finales del compañero
+wCoopAlt::      ds 1     ; el 1, en resultados: alterna MSG_BAND y MSG_SCORE
+wCoopTmp::      ds 6     ; aciertos y total de notas (dígitos) para el MSG_SCORE de Co-Op
+wPeerDiffSeen:: ds 1     ; menú de Co-Op: la dificultad del otro con que se calculó el récord de banda
 wPeerLine::     ds 20
 
 ; --- opciones (seis valores seguidos: el índice del renglón de la pantalla de opciones indexa wOpt) ---

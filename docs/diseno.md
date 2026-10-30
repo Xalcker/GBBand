@@ -126,11 +126,14 @@ el maestro es el **jugador 1**. Si el saludo no coincide, sale `CANCIONES DISTIN
 repitiendo su saludo el segundo que dura "CONECTADO" (para que el otro también lo complete) y a veces deja un hueco al azar
 antes de repetirlo (para que una falla periódica del cable no corte siempre el mismo byte).
 
-**Un byte por cuadro (hecho).** `LinkTick` corre en cada cuadro desde el bucle principal, en cualquier estado: el maestro
-manda el siguiente byte (no en la ISR de VBlank, que ya va justa; ver `wOverrun`) y los mensajes que se completaron quedan
-en variables con su bit en `wLinkGot`. La ISR serie (vector `$0058`) solo guarda el byte que llegó y, en el esclavo, arma
-el siguiente. A 8 KHz un byte tarda ~1 ms. Si en 2 s no llega nada del otro, se da la conexión por perdida: en el menú se
-vuelve al título y, jugando, se sigue solo.
+**Un byte por cuadro (hecho).** El maestro manda su byte en la ISR de STAT, con LYC en la línea 64 (`StatISR`): así sale
+siempre en el mismo punto del cuadro, por más que tarde el bucle principal. A 8 KHz un byte tarda ~1 ms (unas 9 líneas),
+así que termina dentro del mismo cuadro. (Mandarlo desde el bucle principal juntaba dos envíos cuando un cuadro se
+atrasaba; mandarlo al principio del VBlank lo hacía terminar justo en el cambio de cuadro de PyBoy. Las dos cosas perdían
+bytes en el puente de las pruebas.) La ISR serie (vector `$0058`) solo guarda el byte que llegó y, en el esclavo, arma el
+siguiente. `LinkTick` corre en cada cuadro desde el bucle principal, en cualquier estado: lee lo que llegó y los mensajes
+completos quedan en variables con su bit en `wLinkGot`. Si en 2 s no llega nada del otro, se da la conexión por perdida:
+en el menú se vuelve al título y, jugando, se sigue solo.
 
 **Menú (hecho).** Cada consola manda su estado (`MSG_MENU`: canción, instrumento, dificultad, listo y sin fallo) cuando
 cambia y cada 8 cuadros, así que un mensaje perdido se repara solo. El jugador 1 elige la canción y, en VS, la dificultad
@@ -160,10 +163,18 @@ siempre.
   instrumento, también se calla su canal. Con fallo activado, si alguien pierde, la partida termina para los dos y no hay
   récord. Los resultados muestran el puntaje del otro y `GANA J1 POR 001230`, `EMPATE` o `GANA J1 - J2 PERDIO` (hasta que
   llega el puntaje final del otro, `ESPERANDO A J2...`). Cada quien guarda su récord en su cartucho.
-- **Co-Op (banda):** el **maestro es la autoridad** del marcador de banda. El esclavo manda sus eventos del cuadro
-  (aciertos, fallos, frase estelar, pedir poder o revivir) y el maestro devuelve el estado de banda (puntaje, combo,
-  multiplicador, barra estelar). Así los dos ven lo mismo aunque el esclavo lo vea 1 cuadro tarde. La vida es de cada
-  quien; con media barra estelar, Select revive al caído. Récord de banda aparte, como en NESBand.
+- **Co-Op (hecho, `coop.asm`):** el **jugador 1 es la autoridad** de la banda: puntaje, combo, multiplicador y barra
+  estelar. El juez se partió en lo personal (aciertos, fallos, vida, silencio) y lo de la banda (`BandHit`, `BandBreak`,
+  `BandPhrase`, `BandStar`); el 1 aplica lo de la banda directo y también a los eventos del 2 (`MSG_EVENTS`: aciertos antes
+  y después del último fallo del lote, frases, decenas de las colas, Select y sus banderas), que llegan ~cada 8 cuadros. El
+  2 no suma nada a la banda: muestra el estado que le manda el 1 (`MSG_BAND`, 12 bytes, ~4 veces por segundo). Un fallo
+  de cualquiera rompe el combo de los dos. La vida es de cada quien: quien cae deja de sumar, sus fallos ya no rompen el
+  combo y su canal se calla también en la consola del otro; quien sigue en pie lo revive con Select gastando media barra
+  (vuelve con media vida); si caen los dos, la banda pierde y la partida termina. En resultados cada consola espera los
+  datos finales del otro (`ESPERANDO A J2...`): el puntaje, el combo máximo y las estrellas son de la banda (las estrellas
+  sobre el máximo con las notas de los dos) y el renglón 7 trae las notas del compañero (`J2 NOTAS 175/175`). El **récord
+  de banda** va aparte (clave 16 + la dificultad más alta de los dos), solo si los dos terminan en pie, y es el que muestra
+  el menú en Co-Op. Limitación: si el cable pierde un `MSG_EVENTS`, esos aciertos del 2 no cuentan para la banda.
 - **Audio:** las dos consolas tocan la canción completa; cada una calla el canal del instrumento de quien esté fallando
   (el suyo o el del compañero, que llega en las banderas).
 
@@ -184,7 +195,7 @@ no se desempatan nunca, porque hacen exactamente lo mismo; dos consolas reales n
 1. ~~Controlador serie, saludo y puente de dos PyBoy en las pruebas (pantalla de conexión).~~ Hecho.
 2. ~~Del saludo al menú, elección de canción por el jugador 1 y arranque sincronizado.~~ Hecho.
 3. ~~VS completo (puntaje del rival, resultados, corte al perder).~~ Hecho.
-4. Co-Op completo (marcador de banda, revivir, récord de banda).
+4. ~~Co-Op completo (marcador de banda, revivir, récord de banda).~~ Hecho.
 5. Documentación y prueba a mano en emulador con dos ventanas.
 
 ## Estado actual
