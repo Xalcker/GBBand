@@ -166,6 +166,7 @@ wScoreUnits::   ds 2     ; suma de multiplicadores de las notas acertadas (unida
 wHudDirty::     ds 1
 wQSrc::         ds 2
 wQDigit::       ds 1
+wTitleBlink::   ds 1     ; bit 5 de hFrame la última vez que se dibujó "PRESIONA START" (parpadea cada 32 cuadros)
 
 ; --- opciones (seis valores seguidos: el índice del renglón de la pantalla de opciones indexa wOpt) ---
 wOpt::
