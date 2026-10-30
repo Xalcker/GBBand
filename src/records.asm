@@ -156,13 +156,31 @@ ComputeSongHash:
     ret
 
 ; Clave del récord de lo elegido en el menú
+; (Co-Op por cable: el récord de banda, 16 + la dificultad más alta de los dos)
 ComputeRecordKey:
+    call LinkIsCoop
+    jr z, .band
     ld a, [wInstrument]
     add a
     add a
     ld b, a
     ld a, [wDifficulty]
     add b
+    ld [wRecKey], a
+    ret
+.band:
+    ld a, [wPeerMenu + 2]
+    cp 4
+    jr c, .peerKnown
+    xor a
+.peerKnown:
+    ld b, a
+    ld a, [wDifficulty]
+    cp b
+    jr nc, .max
+    ld a, b
+.max:
+    add 16
     ld [wRecKey], a
     ret
 
@@ -278,6 +296,13 @@ CheckNewRecord:
     ld a, [wVsCut]          ; VS cortado porque alguien perdió: la canción no se terminó
     or b
     ret nz
+    ld a, [wCoopGame]       ; Co-Op: el récord de banda solo vale si los dos terminan en pie
+    and a
+    jr z, .standing
+    ld a, [wRivalFlags]
+    bit RIVALB_FAILED, a
+    ret nz
+.standing:
     call PackScore
     call SramLoadRecord
     ld a, [wRecFound]

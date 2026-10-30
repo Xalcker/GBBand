@@ -42,6 +42,7 @@ DEF rIE   EQU $FFFF
 DEF IEF_VBLANK EQU %00000001
 DEF IEF_STAT   EQU %00000010
 DEF IEF_SERIAL EQU %00001000
+DEF STATF_LYC  EQU %01000000    ; rSTAT: la interrupción STAT salta cuando LY = LYC
 
 ; --- Puerto serie (cable link) --------------------------------------------------
 DEF rSB   EQU $FF01         ; byte que sale y, al terminar la transferencia, el que llegó

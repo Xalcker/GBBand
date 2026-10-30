@@ -86,6 +86,8 @@ Mesen de pruebas: `tools\mesen\Mesen.exe --testrunner <rom absoluta> <script.lua
   Dos emuladores idénticos que entran en el mismo cuadro nunca se desempatan: en las pruebas, que entren al menos un cuadro
   aparte. El puente puede perder bytes (y `drop_rate` los pierde a propósito): todo mensaje importante del protocolo se
   repite hasta que el otro contesta. Para medir con varias semillas, ver la prueba `test_un_cable_que_pierde_bytes_no_atora_nada`.
+  Un byte tarda ~9 líneas: el maestro lo manda en la ISR de STAT a media pantalla. Si `bridge.lost` sube sin `drop_rate`,
+  algo está mandando cerca del cambio de cuadro o dos veces por cuadro.
 - **Python con cadenas con `
 ` desde bash:** no armes parches con heredoc que lleven `
 ` dentro de comillas triples (se vuelven

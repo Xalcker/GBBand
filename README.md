@@ -68,8 +68,10 @@ carriles, medio 4 y difícil y experto 5. En la batería el bombo es una barra n
   vez en las dos consolas. Con 2 jugadores no hay opciones ni pausa. **VS:** abajo ves el puntaje del otro (`J2  001230`) en
   lugar del combo; si el otro falla con otro instrumento, su canal también se calla en tu consola; con fallo activado, si
   alguien pierde, la partida termina para los dos (sin récord). Los resultados dicen `GANA J1 POR 001230`, `EMPATE` o
-  `GANA J1 - J2 PERDIO`. El Co-Op (puntaje, combo y poder estelar de la banda) viene después: por ahora cada quien juega
-  su partida.
+  `GANA J1 - J2 PERDIO`. **Co-Op (banda):** el puntaje, el combo y la barra estelar son de la banda (si cualquiera falla,
+  se rompe el combo de los dos; Select en cualquiera de las dos consolas activa el poder). La vida es de cada quien: si
+  uno cae, su instrumento se calla y el otro sigue; el que sigue en pie lo revive con Select gastando media barra. Si caen
+  los dos, la banda pierde. El récord de banda va aparte y solo vale si los dos terminan en pie.
 
 **Canciones incluidas** (originales de NESBand, GPL-2.0-or-later, componidas en Python con `audio/*.py`): *Primer Ensayo*,
 *Tormenta de Neon* (rock), *Luz de Luna* (balada), *Salto Mortal* (funk), *Marcha del Cartucho*, *Noche sin Estrellas*,

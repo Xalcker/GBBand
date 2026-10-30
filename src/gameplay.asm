@@ -262,10 +262,13 @@ HoldLane:
     and 7
     jr nz, .noScore
     push bc
+    call CoopSustain        ; Co-Op: el 2 se lo manda al 1 y quien cayó no suma (carry = 1)
+    jr c, .sustained
     ld a, 1
     call ScoreAddTens
     ld hl, wHudDirty
     set 0, [hl]
+.sustained:
     pop bc
 .noScore:
     ld a, c
@@ -543,9 +546,25 @@ PadToLanes:
     ret
 
 ; ---- Puntaje y combo --------------------------------------------------------------------------
+; Lo personal (aciertos, fallos, vida, silencio) es de cada consola; lo de la banda (combo, multiplicador, puntaje, barra
+; estelar) va en Band... para que en Co-Op el jugador 1 también lo aplique a los eventos del 2 (ver coop.asm).
 HitNote:
     ld hl, wHitsDigits + 2
     call Inc3Digits
+    call CoopHit            ; Co-Op: el 2 se lo manda al 1 y quien cayó no suma (carry = 1)
+    call nc, BandHit
+    call LifeGain
+    ld a, [wFailed]         ; tras perder, el instrumento no vuelve a sonar
+    and a
+    jr nz, .failed
+    ld [wMuted], a
+.failed:
+    ld a, $03
+    ld [wHudDirty], a
+    ret
+
+; Un acierto de la banda: combo, combo máximo, multiplicador y puntaje
+BandHit:
     ld hl, wComboDigits + 2
     call Inc3Digits
     ; combo máximo = max(combo máximo, combo)
@@ -603,17 +622,8 @@ HitNote:
     ld hl, wScoreUnits
     add [hl]
     ld [hl+], a
-    jr nc, .unitsDone
+    ret nc
     inc [hl]
-.unitsDone:
-    call LifeGain
-    ld a, [wFailed]         ; tras perder, el instrumento no vuelve a sonar
-    and a
-    jr nz, .failed
-    ld [wMuted], a
-.failed:
-    ld a, $03
-    ld [wHudDirty], a
     ret
 
 MissNote:
@@ -641,6 +651,16 @@ AirStrum:
     pop de
     pop bc
 BreakCombo:
+    call CoopBreak          ; Co-Op: el 2 se lo manda al 1 y quien cayó ya no rompe el combo (carry = 1)
+    call nc, BandBreak
+    ld a, 1
+    ld [wMuted], a
+    ld a, $03
+    ld [wHudDirty], a
+    ret
+
+; Se rompe el combo de la banda
+BandBreak:
     xor a
     ld hl, wComboDigits
     ld [hl+], a
@@ -648,9 +668,6 @@ BreakCombo:
     ld [hl], a
     inc a
     ld [wMult], a
-    ld [wMuted], a
-    ld a, $03
-    ld [wHudDirty], a
     ret
 
 ; ---- Poder estelar -------------------------------------------------------------------------------
@@ -708,6 +725,16 @@ StarCheckEnd:
     ld a, [wStarRun]
     and a
     jr z, .reset
+    call CoopPhrase         ; Co-Op: el 2 se lo manda al 1 (carry = 1)
+    call nc, BandPhrase
+.reset:
+    xor a
+    ld [wStarRun], a
+    ld [wStarFail], a
+    ret
+
+; Una frase estelar completa: la barra de la banda sube un cuarto
+BandPhrase:
     ld a, [wStarEnergy]
     add STAR_PHRASE
     cp STAR_MAX + 1
@@ -715,13 +742,13 @@ StarCheckEnd:
     ld a, STAR_MAX
 .store:
     ld [wStarEnergy], a
-.reset:
-    xor a
-    ld [wStarRun], a
-    ld [wStarFail], a
     ret
 
+; Select: activa el poder estelar (en Co-Op, si el compañero cayó, lo revive: ver CoopSelect)
 StarActivate:
+    call CoopSelect
+    ret c
+BandStar:
     ld a, [wStarActive]
     and a
     ret nz
@@ -737,6 +764,9 @@ StarActivate:
     ret
 
 StarTick:
+    call CoopRole           ; (en Co-Op la barra del 2 es la que manda el 1)
+    cp 2
+    ret z
     ld a, [wStarActive]
     and a
     ret z

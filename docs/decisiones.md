@@ -151,3 +151,10 @@ Decisiones menores que tomé yo, con su motivo. Las de gran tamaño se proponen 
 24. **Cable link.** Ver la sección "2 jugadores por cable link" de [diseno.md](diseno.md): protocolo de mensajes con tipo,
     suma de comprobación y "nada que mandar" en `$80`; todo lo importante se repite hasta que el otro contesta, porque las
     pruebas pierden bytes a propósito (`LinkBridge(drop_rate=...)`). La ISR serie va en ROM0 y no cambia de banco.
+25. **El maestro manda en la ISR de STAT (LYC = 64).** Un byte tarda ~9 líneas en cruzar; enviado desde el bucle principal, dos
+    envíos se juntaban cuando un cuadro se atrasaba, y desde el principio del VBlank terminaba justo en el cambio de cuadro de
+    PyBoy: en el puente se perdía hasta el 24 % de los bytes jugando (en Co-Op el estado de la banda casi nunca llegaba). A
+    media pantalla, 0 %. La interrupción de STAT solo está encendida mientras la consola es el maestro del cable.
+26. **Co-Op: el juez partido en dos.** Lo personal (aciertos, fallos, vida, silencio) y lo de la banda (`BandHit`, `BandBreak`,
+    `BandPhrase`, `BandStar`) van por separado para que el jugador 1 aplique lo de la banda también a los eventos del 2. Los
+    ganchos `Coop...` de `coop.asm` deciden con el carry si algo se suma aquí o no.
