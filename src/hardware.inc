@@ -41,6 +41,11 @@ DEF rIF   EQU $FF0F
 DEF rIE   EQU $FFFF
 DEF IEF_VBLANK EQU %00000001
 DEF IEF_STAT   EQU %00000010
+DEF IEF_SERIAL EQU %00001000
+
+; --- Puerto serie (cable link) --------------------------------------------------
+DEF rSB   EQU $FF01         ; byte que sale y, al terminar la transferencia, el que llegó
+DEF rSC   EQU $FF02         ; bit 7 = transfiriendo, bit 0 = reloj interno (1, maestro) o externo (0, esclavo)
 
 DEF rNR10 EQU $FF10
 DEF rNR11 EQU $FF11
