@@ -139,6 +139,9 @@ MainLoop:
     ldh [hVBlank], a
     ld a, 1
     ldh [hMainBusy], a
+    ldh a, [hLinkOn]        ; cable link: un byte por cuadro y los mensajes que llegaron (puede cambiar de estado)
+    and a
+    call nz, LinkTick
     ld a, [wState]          ; despacho por la tabla de estados
     add a
     ld e, a
@@ -158,7 +161,7 @@ MainLoop:
 
 ; Un manejador por estado, en el orden de STATE_...
 StateTable:
-    dw TitleFrame, MenuFrame, PlayFrame, PauseFrame, ResultsFrame, InitialsFrame, OptionsFrame, LinkFrame
+    dw TitleFrame, MenuFrame, PlayFrame, PauseFrame, ResultsFrame, InitialsFrame, OptionsFrame, LinkFrame, LinkWaitFrame
 
 ; ---- Utilidades --------------------------------------------------------------
 

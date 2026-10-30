@@ -45,7 +45,7 @@ en `tools/mesen/`.
 
 ## Cómo jugar
 
-En el título, Start abre el menú. En el menú, ↑/↓ cambia de renglón (canción, instrumento, dificultad, fallo), ←/→ cambia el
+En el título, Start abre el menú (con `1 JUGADOR`; ver abajo para 2). En el menú, ↑/↓ cambia de renglón (canción, instrumento, dificultad, fallo), ←/→ cambia el
 valor, **Select** abre las opciones y Start empieza. Carriles: verde ←, rojo ↓, amarillo →, azul B, naranja A. Fácil usa 3
 carriles, medio 4 y difícil y experto 5. En la batería el bombo es una barra naranja que cruza todos los carriles (botón A).
 
@@ -61,6 +61,12 @@ carriles, medio 4 y difícil y experto 5. En la batería el bombo es una barra n
   práctica (principio, 1/4, 1/2, 3/4) y EFECTO AL FALLAR (SI, SOLO SONIDO o NO). Con una opción distinta de la normal (salvo el
   efecto) no hay récords. En la pausa de la práctica, **A** hace que el bucle empiece 2 s antes de donde pausaste y **B** que
   termine donde pausaste (el bucle debe durar al menos 4 s); las marcas valen hasta volver al menú.
+- **2 jugadores (en desarrollo; probado solo en emulador):** cada quien con su Game Boy, su cartucho (con las mismas
+  canciones) y un cable link. En el título, ←/→ cambia JUGADORES a `2 JUG. VS` o `2 JUG. COOP` y Start busca al otro.
+  El que queda como jugador 1 elige la canción (y en VS la dificultad); cada quien elige su instrumento, y en Co-Op no
+  pueden ser el mismo. Abajo se ve qué eligió el otro. Start dice "listo" y, con los dos listos, la canción empieza a la
+  vez en las dos consolas. Con 2 jugadores no hay opciones ni pausa. Por ahora cada quien juega su partida; el marcador
+  del rival (VS) y el de la banda (Co-Op) vienen después.
 
 **Canciones incluidas** (originales de NESBand, GPL-2.0-or-later, componidas en Python con `audio/*.py`): *Primer Ensayo*,
 *Tormenta de Neon* (rock), *Luz de Luna* (balada), *Salto Mortal* (funk), *Marcha del Cartucho*, *Noche sin Estrellas*,

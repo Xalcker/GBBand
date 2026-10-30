@@ -18,11 +18,13 @@ DEF STATE_RESULTS  EQU 4
 DEF STATE_INITIALS EQU 5
 DEF STATE_OPTIONS EQU 6
 DEF STATE_LINK    EQU 7         ; conexión por cable link (2 jugadores)
+DEF STATE_LINKWAIT EQU 8        ; 2 jugadores: canción preparada, esperando la salida sincronizada
 
 ; --- Cable link (ver link.asm) -----------------------------------------------------------------------------------
 DEF LINK_VERSION   EQU 1        ; sube cuando cambie el protocolo: dos versiones distintas no se conectan
 DEF LINK_MAX_DATA  EQU 7        ; bytes de datos del mensaje más largo
 DEF LINK_HELLO_LEN EQU 3        ; saludo: versión y hash de la lista de canciones en dos bytes de 7 bits
+DEF LINK_MENU_LEN  EQU 4        ; estado del menú: canción, instrumento, dificultad, banderas
 
 ; --- Vida (cada acierto suma 1; perder una nota resta 2, o 1 en fácil; un golpe al aire resta 1) -------------
 DEF LIFE_MAX   EQU 40

@@ -79,6 +79,10 @@ Mesen de pruebas: `tools\mesen\Mesen.exe --testrunner <rom absoluta> <script.lua
   (excepción en `.gitignore`) pero no sale en el menú ni en `song_names()` de las pruebas.
 - **Pruebas con opciones:** `playtest.run_case(..., options={"mirror": 1, "speed": 2, ...})` las pone con botones de verdad en la
   pantalla de opciones; `playtest.run_practice` juega la práctica en bucle con marcas.
+- **Cable link en pruebas:** `linkbridge.LinkBridge` conecta dos `Runner` (el link de PyBoy no sirve: hilos y siempre `$FF`).
+  Dos emuladores idénticos que entran en el mismo cuadro nunca se desempatan: en las pruebas, que entren al menos un cuadro
+  aparte. El puente puede perder bytes (y `drop_rate` los pierde a propósito): todo mensaje importante del protocolo se
+  repite hasta que el otro contesta. Para medir con varias semillas, ver la prueba `test_un_cable_que_pierde_bytes_no_atora_nada`.
 - **Python con cadenas con `
 ` desde bash:** no armes parches con heredoc que lleven `
 ` dentro de comillas triples (se vuelven
