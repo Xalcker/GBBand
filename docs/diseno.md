@@ -142,16 +142,24 @@ desincronizarían las consolas (se ponen en normal al empezar), y pausar una dej
 
 **Arranque sincronizado (hecho).** Cada consola tarda distinto en preparar la canción con el LCD apagado (la CGB limpia dos
 bancos de VRAM), así que con los dos listos cada una la prepara y espera en `STATE_LINKWAIT` con la autopista en pantalla.
-El jugador 1 repite `MSG_START` hasta que el 2 contesta `MSG_SET 0` (ya la preparó); entonces cuenta 30 cuadros y repite
-`MSG_GO` con los que faltan. El 2 toma la cuenta del último que le llegó y contesta `MSG_SET 1` mientras cuenta. Los dos
-echan a andar la canción al llegar a 0. A 12 cuadros del final, si lo último que el 1 oyó fue `MSG_SET 0` (al 2 no le ha
-llegado ninguna cuenta), la vuelve a empezar; el 2 nunca empieza sin cuenta, así que nadie arranca solo. En las pruebas
-empiezan en el mismo cuadro (o con uno de diferencia por el puente). Los dos cristales difieren en unas ppm: en una canción
-de 4 minutos es menos de un cuadro; si en consolas reales se nota, el paso 3 puede mandar `wT` para corregirlo.
+El jugador 1 repite `MSG_START` hasta que el 2 contesta `MSG_SET 0` (ya la preparó); entonces cuenta 45 cuadros y repite
+`MSG_GO` con los que faltan. El 2 toma la cuenta del último que le llegó y contesta `MSG_SET 1` mientras cuenta (con la
+primera cuenta tira lo que tenía por mandar, para confirmar enseguida). Los dos echan a andar la canción al llegar a 0. A
+15 cuadros del final, si el 2 nunca confirmó y en los últimos 4 cuadros dijo `MSG_SET 0` (sigue sin cuenta), el 1 la vuelve
+a empezar; el 2 nunca empieza sin cuenta. En las pruebas empiezan en el mismo cuadro (o con uno de diferencia por el puente),
+también con un cable que pierde el 20 % de los bytes (40 semillas). Los dos cristales difieren en unas ppm: en una canción
+de 4 minutos es menos de un cuadro; si en consolas reales se nota, se puede mandar `wT` para corregirlo.
 
-- **VS:** cada consola manda su puntaje (3 bytes BCD) y banderas (vida baja, perdió, poder estelar activo, instrumento
-  callado). La pantalla muestra el puntaje del rival en la Window. Al final: `GANA J1 POR 001230`, `EMPATE` o, con fallo,
-  `GANA J2 - J1 PERDIO` (la partida se corta). Cada quien guarda su récord en su cartucho.
+Si a una consola ya conectada le llega un saludo, el otro sigue buscando (no completó el suyo): le contesta con el suyo
+desde cualquier estado. Sin eso, si uno pasaba al menú y el otro no había completado el saludo, se quedaba buscando para
+siempre.
+
+- **VS (hecho):** jugando y en resultados, cada consola manda `MSG_SCORE` cada vez que su cola se vacía (~10 veces por
+  segundo): el puntaje en 3 bytes de dos dígitos y banderas (perdió, instrumento callado, ya terminó). En VS el renglón del
+  combo muestra el puntaje del otro (`J2  001230`; el multiplicador sigue a la vista). Si el otro falla con otro
+  instrumento, también se calla su canal. Con fallo activado, si alguien pierde, la partida termina para los dos y no hay
+  récord. Los resultados muestran el puntaje del otro y `GANA J1 POR 001230`, `EMPATE` o `GANA J1 - J2 PERDIO` (hasta que
+  llega el puntaje final del otro, `ESPERANDO A J2...`). Cada quien guarda su récord en su cartucho.
 - **Co-Op (banda):** el **maestro es la autoridad** del marcador de banda. El esclavo manda sus eventos del cuadro
   (aciertos, fallos, frase estelar, pedir poder o revivir) y el maestro devuelve el estado de banda (puntaje, combo,
   multiplicador, barra estelar). Así los dos ven lo mismo aunque el esclavo lo vea 1 cuadro tarde. La vida es de cada
@@ -175,7 +183,7 @@ no se desempatan nunca, porque hacen exactamente lo mismo; dos consolas reales n
 
 1. ~~Controlador serie, saludo y puente de dos PyBoy en las pruebas (pantalla de conexión).~~ Hecho.
 2. ~~Del saludo al menú, elección de canción por el jugador 1 y arranque sincronizado.~~ Hecho.
-3. VS completo (puntaje del rival, resultados, corte al perder).
+3. ~~VS completo (puntaje del rival, resultados, corte al perder).~~ Hecho.
 4. Co-Op completo (marcador de banda, revivir, récord de banda).
 5. Documentación y prueba a mano en emulador con dos ventanas.
 

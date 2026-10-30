@@ -619,6 +619,14 @@ BeginPlay:
     call LcdOff
     call ClearMaps
     call StageDraw
+    call LinkIsVs           ; VS por cable: el marcador muestra al otro en vez del combo
+    ld a, 0
+    jr nz, .notVs
+    inc a
+.notVs:
+    ld [wVsGame], a
+    xor a
+    ld [wVsCut], a
     call HudDraw
 
     xor a
@@ -813,9 +821,12 @@ PlayFrame:
     add hl, de
     ld a, [hl]
 .notMuted:
+    call LinkMuteRival      ; 2 jugadores: también calla el canal del otro si está fallando
     ld [wNr51Out], a
     call FillAudioRing
 
+    call LinkVsCut          ; VS: si alguien perdió, la partida termina para los dos
+    jr c, .songEnd
     ld a, [wT]
     ld c, a
     ld a, [wT + 1]
@@ -829,6 +840,7 @@ PlayFrame:
     ld a, b
     sbc d
     jr c, .notEnd
+.songEnd:
     call FxClear
     ld a, [wOptPractice]    ; la práctica no termina: el bucle vuelve a empezar
     and a
@@ -931,6 +943,9 @@ PauseFrame:
 ; ---- Resultados ---------------------------------------------------------------------------------
 EndFrame:
 ResultsFrame:
+    ld a, [wVsGame]
+    and a
+    call nz, ResultsVsUpdate ; VS: el puntaje final del otro puede llegar ya en los resultados
     di
     ldh a, [hPadNew]
     ld b, a

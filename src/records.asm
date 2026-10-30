@@ -274,6 +274,9 @@ CheckNewRecord:
     ld b, a
     ld a, [wOptionsUsed]
     or b
+    ld b, a
+    ld a, [wVsCut]          ; VS cortado porque alguien perdió: la canción no se terminó
+    or b
     ret nz
     call PackScore
     call SramLoadRecord

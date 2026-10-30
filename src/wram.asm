@@ -189,7 +189,14 @@ wMenuMsg::      ds LINK_MENU_LEN + 1
 wReady::        ds 1     ; 1 = este jugador dijo "listo" en el menú
 wLinkStarting:: ds 1     ; cuadros que faltan para echar a andar la canción (0 = todavía no hay cuenta regresiva)
 wMenuRefresh::  ds 1     ; cuadros para volver a mandar el estado del menú aunque no cambie
-wLinkAcked::    ds 1     ; jugador 1: lo último que dijo el 2 de la cuenta (0 no la tiene, 1 sí, $FF no ha dicho)
+wLinkAcked::    ds 1     ; jugador 1: 1 = el 2 confirmó que tiene la cuenta regresiva
+wLinkSet0Age::  ds 1     ; jugador 1: cuadros desde el último MSG_SET 0 del 2 (se queda en 255)
+wRivalMsg::     ds LINK_SCORE_LEN   ; el último MSG_SCORE del otro, tal como llegó
+wRivalDigits::  ds 6     ; su puntaje (un dígito por byte, como wScoreDigits)
+wRivalFlags::   ds 1     ; sus banderas (RIVALB_...)
+wRivalDirty::   ds 1     ; 1 = llegó un MSG_SCORE que los resultados todavía no muestran
+wVsCut::        ds 1     ; 1 = la partida de VS se cortó porque alguien perdió (no hay récord)
+wVsGame::       ds 1     ; 1 = esta partida es de VS por cable (lo fija BeginPlay: el marcador muestra al otro)
 wPeerLine::     ds 20
 
 ; --- opciones (seis valores seguidos: el índice del renglón de la pantalla de opciones indexa wOpt) ---
