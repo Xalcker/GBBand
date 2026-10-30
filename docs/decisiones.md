@@ -103,7 +103,7 @@ Decisiones menores que tomé yo, con su motivo. Las de gran tamaño se proponen 
 12. **El editor** reutiliza la página de NESBand: sus canales siguen siendo Square 1/2, Triángulo, Ruido y DPCM (la IR), pero
     "Escuchar" toca el stream de la ROM (4 canales; Ruido y DPCM comparten el CH4). `Exportar a la ROM` reimporta la canción.
 13. **Pendiente de la fase 3:** `preview` (WAV de cada pista de un NSF sin .m3u: de momento se importa con `--song N` y se
-    escucha en el editor), importador GBS/VGM (fase 5), keyframes y práctica (fase 4), y la prueba de sincronía después de pausar.
+    escucha en el editor), importador GBS/VGM (fase 5, ya está: punto 28), keyframes y práctica (fase 4), y la prueba de sincronía después de pausar.
 14. **Efecto al fallar (de NESBand v0.3.2).** Al fallar (nota que se pasó o golpe al aire) suena uno de
     tres efectos (clank, thud, bwomp) sin repetir el anterior, en un canal de pulso que no sea el del instrumento que falla
     (ese canal se calla al fallar). La autopista tiembla (SCX de 1-2 px) y la paleta se tiñe de rojo 6 cuadros, con 14 de
@@ -165,3 +165,17 @@ Decisiones menores que tomé yo, con su motivo. Las de gran tamaño se proponen 
     y solo si la cola de VRAM del cuadro lleva 32 bytes o menos (`ERASE_QMAX`): el peor cuadro de todas las partidas sigue
     igual que sin borrar (línea 9 de 10 del VBlank, en batería). Las pruebas leen el mapa unos cuadros después de cada nota:
     con el bot perfecto no queda ninguna gema; sin tocar, quedan todas. En la batería no se borra (el bombo cruza la fila).
+28. **Importador de VGM y GBS.** La música de Game Boy entra a la misma IR que la del NES, con los nombres de canal del NES:
+    CH1 -> Square1, CH2 -> Square2, CH3 (onda) -> Triangle y los disparos de CH4 -> golpes de Noise (su "altura" sale de
+    NR43, 3 pasos por octava, +12 en el modo corto). `gbapu.py` lleva el estado del APU (envolventes, longitud, barrido,
+    paneo, apagado) con el secuenciador de 512 Hz y registra cada cuadro de 70 224 ciclos; un canal que no sale por ninguna
+    bocina (NR51) cuenta como callado. La forma de onda de CH3 se pierde (suena el triángulo), salvo que si la wave RAM
+    repite su dibujo 2 o 4 veces la nota sube de octava. Un VGM se lee directo (comando `$B3`; los otros chips se saltan y,
+    si no hay Game Boy, se rechaza); un GBS se corre en un SM83 propio (`sm83.py`, todos los opcodes, sin interrupciones)
+    con play cada VBlank o al ritmo del timer, bancos tipo MBC1 y los RST en la dirección de carga. El SM83 se compara contra
+    el CPU de PyBoy con una ROM que prueba cada opcode con registros, banderas y memoria al azar (`test_gbs.py`; una prueba
+    de mutación confirmó que detecta errores en DAA, ADD SP y SRA). Una misma canción escrita como VGM y como GBS da los mismos
+    ataques y alturas; algunas duraciones cambian por un cuadro (el VGM la escribía a medio cuadro). Las dos se jugaron en la
+    ROM (PyBoy, DMG y CGB, bot perfecto): 100 %, sincronía exacta, sin desbordes de la ISR. **No se probó con ningún VGM ni
+    GBS comercial real**, igual que con los NSF. En los `.m3u` de GBS, `--track` usa el número tal como viene (suelen contar
+    desde 0; si el `.m3u` no tiene pista 0, se cuenta desde 1).

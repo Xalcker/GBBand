@@ -1,7 +1,7 @@
 # Ideas pendientes
 
-- Fase 5: importador GBS/VGM, borde Super Game Boy, rumble de MBC5, impresión de
-  récord con Game Boy Printer. (VS y Co-Op por cable link ya están.)
+- Fase 5: borde Super Game Boy, rumble de MBC5, impresión de récord con Game Boy Printer. (VS y Co-Op por cable link y el
+  importador de VGM y GBS ya están.)
 - Compresión del stream FRS (RLE de cuadros repetidos o LZ pequeño) si no caben las canciones largas.
 - Opción de ganancia por canal para calibrar de oído el balance de volumen NES → GB.
 

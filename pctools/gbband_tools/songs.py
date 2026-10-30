@@ -1,7 +1,9 @@
-"""Importar canciones: de una fuente (proyecto de FamiStudio o NSF) a src/songs/<nombre>/.
+"""Importar canciones: de una fuente (proyecto de FamiStudio, NSF, VGM de Game Boy o GBS) a src/songs/<nombre>/.
 
     uv run gbband import-song audio/tormenta.txt --name tormenta --title "Tormenta de Neon" --game GBBand
     uv run gbband import-song "songs_src/Juego.nsf" --track 2 --name juego_area1
+    uv run gbband import-song "songs_src/Juego - Pista.vgz" --name juego_pista
+    uv run gbband import-song "songs_src/Juego.gbs" --track 3 --name juego_nivel1
     uv run gbband list-songs        (regenera build/list.asm, la lista de canciones que entran en la ROM)
     uv run gbband reimport          (todas, con las mismas opciones, tras mejorar el generador)
 
@@ -94,7 +96,16 @@ def load_source(path: Path, options: Options) -> tuple[ir.SongIR, str, str]:
         from . import nsf
 
         return nsf.load(path, options)
-    raise SystemExit(f"{path.name}: solo se importan proyectos de texto de FamiStudio (.txt) y NSF (.nsf)")
+    if suffix in (".vgm", ".vgz"):
+        from . import vgm
+
+        return vgm.load(path, options)
+    if suffix == ".gbs":
+        from . import gbs
+
+        return gbs.load(path, options)
+    raise SystemExit(f"{path.name}: solo se importan proyectos de texto de FamiStudio (.txt), NSF (.nsf), "
+                     "VGM de Game Boy (.vgm, .vgz) y GBS (.gbs)")
 
 
 def truncated(song: ir.SongIR, frames: int) -> ir.SongIR:

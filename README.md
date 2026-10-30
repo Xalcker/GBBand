@@ -31,7 +31,7 @@ Todo el código de GBBand lo escribe una IA (Claude). Yo solo pongo las ideas y 
    `uv sync` crea el entorno (incluye PyBoy, el corredor de pruebas).
 
 `tools/` está en `.gitignore`: cada máquina baja sus propias herramientas. **FamiStudio no hace falta**: las canciones
-originales son proyectos de texto que GBBand lee solo, y los NSF se ejecutan en un 6502 propio.
+originales son proyectos de texto que GBBand lee solo, los NSF se ejecutan en un 6502 propio y los GBS en un SM83 propio.
 
 ### macOS
 
@@ -103,7 +103,8 @@ Las pruebas compilan el ROM y corren bots en PyBoy, en modo DMG y en CGB (con `G
 ella, tres representativas, unos 60 s). Por canción e instrumento: un bot **perfecto** (puntaje exacto, 100 %, cada nota del
 chart cae en el mismo cuadro que el alta de nota del canal de su instrumento, 0 cuadros atrasados), otro que **no toca nada**
 (todo falla y solo se calla el canal del instrumento) y otro que **machaca botones**. Además hay pruebas del conversor de
-audio, del formato del stream, de los charts, del importador de NSF (con NSF sintéticos), del editor y de su reproductor
+audio, del formato del stream, de los charts, de los importadores de NSF, VGM y GBS (con archivos sintéticos; el SM83 se
+compara opcode por opcode contra el CPU de PyBoy), del editor y de su reproductor
 (con Node). Dejan `resultado.txt` y capturas en `build/test-<canción>-<bot>-<instrumento>-<dificultad>-<modo>/`.
 Para ver el juego en Mesen: `tools\mesen\Mesen.exe build\gbband.gb`.
 
@@ -131,19 +132,26 @@ deja a la otra tocando sola; en el menú, la regresa al título.
 uv run gbband import-song audio/tormenta.txt --name tormenta --title "Tormenta de Neon" --game GBBand
 uv run gbband import-song "songs_src/Juego.nsf" --track 2 --name juego_area1        # con su .m3u al lado
 uv run gbband import-song "songs_src/Juego.nsf" --song 4 --name juego_jefe --title "El jefe" --duration 75
+uv run gbband import-song "songs_src/Juego - Pista.vgz" --name juego_pista          # VGM de Game Boy
+uv run gbband import-song "songs_src/Juego.gbs" --track 3 --name juego_nivel1       # GBS, con su .m3u al lado
 uv run gbband reimport            # todas, con las mismas opciones, tras mejorar el generador (o una: reimport tormenta)
 uv run gbband list-songs          # regenera build/list.asm (el build lo corre solo)
 ```
 
-Acepta proyectos de texto de FamiStudio (`.txt`, como los de `audio/`) y NSF. Con el `.m3u` de un NSF, `--track N` (desde 1)
-saca el título, el juego y la duración; sin él, `--song N` (desde 0), `--title`, `--game` y `--duration`.
+Acepta proyectos de texto de FamiStudio (`.txt`, como los de `audio/`), NSF, VGM de Game Boy (`.vgm` y `.vgz`) y GBS. Con
+el `.m3u` de un NSF o un GBS, `--track N` saca el título, el juego y la duración; sin él, `--song N` (desde 0), `--title`,
+`--game` y `--duration`. Un VGM trae su título, su juego y su duración en la etiqueta GD3.
+
+De la música de Game Boy, los pulsos van a guitarra y teclado, el canal de onda al bajo (en la ROM suena con el triángulo:
+la forma de onda original se pierde) y el ruido a la batería. Solo se aceptan VGM del APU de la Game Boy: los de otros chips
+(Sega, YM2612...) se rechazan.
 
 | Opción | Para qué |
 |---|---|
-| `--track N` / `--song N` | pista del `.m3u` (desde 1) o del archivo (desde 0) |
+| `--track N` / `--song N` | pista del `.m3u` (desde 1; en los GBS, tal como viene en el `.m3u`, que suele contar desde 0) o del archivo (desde 0) |
 | `--title` / `--game` | lo que se muestra en el menú (20 y 16 caracteres, sin acentos, en mayúsculas) |
-| `--duration S` | solo NSF: cuántos segundos grabar (un NSF no dice cuándo termina) |
-| `--beat-frames N` | cuadros por tiempo, si el tempo detectado sale mal (solo NSF; un proyecto de FamiStudio trae el suyo) |
+| `--duration S` | NSF y GBS: cuántos segundos grabar (no dicen cuándo terminan); VGM: más que su duración repite desde su punto de repetición |
+| `--beat-frames N` | cuadros por tiempo, si el tempo detectado sale mal (NSF, VGM y GBS; un proyecto de FamiStudio trae el suyo) |
 | `--gain ch1=1.0,ch2=0.8,ch3=1.0` | ganancia de volumen por canal, para balancear de oído |
 
 Cada importación escribe `src/songs/<nombre>/` (la ficha `song.asm`, un `chart_<instrumento>_<dificultad>.bin` por chart, el

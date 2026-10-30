@@ -87,13 +87,18 @@ fuente                          IR (ir.py)                       salidas (src/so
 proyecto de FamiStudio (.txt) --> famitext.py -+
                                                +--> SongIR --+--> chart.py + drums.py + chartedit.py --> chart_<instr>_<dif>.bin
 NSF --> cpu6502.py + nsf.py (APU) -------------+             +--> gbaudio.py --> audio_gb.py --> stream_b/c.bin + keyframes.bin
+VGM de Game Boy --> vgm.py ---------+          |
+                                    +-> gbapu.py
+GBS --> sm83.py + gbs.py -----------+
 ```
 
 - **IR.** `SongIR` = las notas de los 5 canales (para los charts, con la misma forma que en NESBand) y, por cuadro y por
   canal tonal, frecuencia en Hz, volumen 0-15, duty y si arrancó una nota (para el audio). No sabe nada de la Game Boy.
 - **Fuentes.** Un proyecto de texto de FamiStudio trae las notas exactas; se lee sin FamiStudio (envolventes de volumen
   y duty). Un NSF se ejecuta en un 6502 (`cpu6502.py`), se emula el APU (envolventes, longitudes, contador lineal, barrido) y
-  se registra el estado de cada cuadro; las notas se derivan de él.
+  se registra el estado de cada cuadro; las notas se derivan de él. La música de Game Boy hace lo mismo con su propio APU
+  (`gbapu.py`): un VGM ya trae las escrituras con sus tiempos y un GBS se ejecuta en un SM83 (`sm83.py`). CH1 y CH2 van a
+  Square1/2, CH3 a Triangle y CH4 a los golpes de Noise (ver decisiones.md, punto 28).
 - **Charts.** El generador de NESBand (contorno, tiempos fuertes, acordes, colas, frases estelares, batería por papeles),
   más `enforce_lane_gap`: dos gemas del mismo carril necesitan 21 / 18 / 14 / 11 cuadros (fácil a experto) para no compartir
   tiles (ver vram.md). Un chart son pares de 2 bytes (cuadros desde la entrada anterior, carriles y marcas).
@@ -209,5 +214,5 @@ no se desempatan nunca, porque hacen exactamente lo mismo; dos consolas reales n
 - **Fase 4** (el juego completo): título con música, menú, opciones (espejo, velocidad, caída, práctica con marcas, efecto al
   fallar), pausa, resultados con estrellas, récords en SRAM, vida y "sin fallo", notas sostenidas, poder estelar, medidores,
   bombo como barra, escenario con torres, reflectores y público al ritmo, color CGB. Hecha; ver decisiones.md (fase 4).
-  Lo que sigue en la fase 5: importador GBS/VGM y el pulido de la release (el link cable para 2 jugadores ya está; falta
-  probarlo en consolas de verdad).
+  Lo que sigue en la fase 5: el pulido de la release (el link cable para 2 jugadores y el importador de VGM y GBS ya están;
+  falta probar el cable en consolas de verdad y los importadores con música comercial real).

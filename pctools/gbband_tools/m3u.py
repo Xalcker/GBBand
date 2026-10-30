@@ -4,7 +4,7 @@
     # Music by Naoki Kodaka & Marumo
     juego.nsf::NSF,2,Area 1,0:01:27,,         <- pista (desde 1), título, duración, fade...
 
-Las comas dentro del título vienen escapadas como "\\,".
+Las comas dentro del título vienen escapadas como "\\,". Los de GBS son iguales con "::GBS," (y suelen numerar desde 0).
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-_ENTRY = re.compile(r"::NSF,(\d+),((?:[^,\\]|\\.)*),([^,]*)")
+_ENTRY = re.compile(r"::(?:NSF|GBS),(\d+),((?:[^,\\]|\\.)*),([^,]*)")
 
 
 @dataclass(frozen=True)
@@ -77,7 +77,7 @@ def parse_extm3u(text: str) -> Playlist:
 def parse_m3u(text: str) -> Playlist:
     game = None
     tracks: dict[int, Track] = {}
-    if "#EXTINF" in text and "::NSF," not in text:
+    if "#EXTINF" in text and "::NSF," not in text and "::GBS," not in text:
         return parse_extm3u(text)
     for line in text.splitlines():
         line = line.strip()
