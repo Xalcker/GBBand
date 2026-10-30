@@ -3,13 +3,14 @@
 Un juego de ritmo estilo Guitar Hero / Rock Band para **Game Boy Color**, compatible con la Game Boy original
 (DMG). Es el equivalente de [NESBand](https://github.com/Xalcker/NESBand).
 
-**Estado actual (fase 3 de 5):** el juego ya tiene **diez canciones** (las originales de NESBand, portadas), cada una con
+**Estado actual (fase 4 de 5, terminada; la 5 trae los 2 jugadores por cable link):** el juego ya tiene **diez canciones** (las originales de NESBand, portadas), cada una con
 charts de **guitarra, teclado, bajo y batería** en 4 dificultades. Un menú elige canción, instrumento y dificultad.
 Las notas caen por una autopista de 5 carriles, se aciertan con ←, ↓, →, B y A (ventana de ±6 cuadros), suman puntaje y
 combo, y el canal del instrumento se calla si fallas. La música es un stream de registros del chip de sonido, un
 registro por cuadro, que se genera en la PC. Corre en Game Boy original (DMG) y en Game Boy Color con el mismo ROM de
-2 MB. Se pueden importar más canciones (proyectos de FamiStudio o NSF) y retocar sus charts en un editor visual. Aún no
-hay título, opciones, pausa, resultados con estrellas ni récords (ver la hoja de ruta en [docs/diseno.md](docs/diseno.md)).
+2 MB. Se pueden importar más canciones (proyectos de FamiStudio o NSF) y retocar sus charts en un editor visual. Tiene
+título con logo y música, opciones, práctica, pausa, resultados con estrellas y récords en la batería del cartucho (ver la
+hoja de ruta en [docs/diseno.md](docs/diseno.md) y lo pendiente en [docs/ideas.md](docs/ideas.md)).
 
 ## Sobre este proyecto
 
