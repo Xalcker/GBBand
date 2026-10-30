@@ -462,6 +462,7 @@ JudgeFrame:
 
 ; Carril apretado A (0 a 4): busca la primera nota pendiente de ese carril dentro de la ventana.
 TryHit:
+    ld [wTryLane], a
     ld e, a
     ld d, 0
     ld hl, LaneBit
@@ -511,6 +512,8 @@ TryHit:
     or [hl]
     ld [hl], a
 .noHold:
+    call FlameStart
+    call GemEraseStart
     call StarNoteHit
     jp HitNote
 .nextI:

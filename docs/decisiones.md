@@ -158,3 +158,10 @@ Decisiones menores que tomé yo, con su motivo. Las de gran tamaño se proponen 
 26. **Co-Op: el juez partido en dos.** Lo personal (aciertos, fallos, vida, silencio) y lo de la banda (`BandHit`, `BandBreak`,
     `BandPhrase`, `BandStar`) van por separado para que el jugador 1 aplique lo de la banda también a los eventos del 2. Los
     ganchos `Coop...` de `coop.asm` deciden con el carry si algo se suma aquí o no.
+27. **Que se note el acierto.** La llamarada son 5 sprites de 8x16 (15 a 19) en las líneas 104 a 119, encima de los aros y
+    debajo de los medidores: nunca más de 5 por línea; el OAM solo se copia cuando cambia el cuadro de animación (cada 4).
+    La gema acertada se borra del fondo: su fila sale del cuadro de la nota por la velocidad (`MulFrames`), igual que al
+    dibujarla, así que se borran justo sus tiles (y con cola, la fila se rellena con la cola). Se borra un carril por cuadro
+    y solo si la cola de VRAM del cuadro lleva 32 bytes o menos (`ERASE_QMAX`): el peor cuadro de todas las partidas sigue
+    igual que sin borrar (línea 9 de 10 del VBlank, en batería). Las pruebas leen el mapa unos cuadros después de cada nota:
+    con el bot perfecto no queda ninguna gema; sin tocar, quedan todas. En la batería no se borra (el bombo cruza la fila).

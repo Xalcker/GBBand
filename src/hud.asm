@@ -151,7 +151,15 @@ OamInit:
     ld [hl+], a
     dec b
     jr nz, .clear
+    ld hl, wFlame            ; sin llamaradas encendidas
+    ld b, NUM_LANES
     xor a
+.flames:
+    ld [hl+], a
+    dec b
+    jr nz, .flames
+    ld [wErPend], a          ; ni gemas por borrar
+    ld [wErWait], a
     ld [wHeld], a
     cpl
     ld [wHeldPrev], a        ; distinto de wHeld: fuerza a UpdateOam a escribirlo todo
@@ -196,6 +204,102 @@ UpdateOamForce:
     jr nz, .sprite
     ld a, 1
     ld [wOamDirty], a
+    ret
+
+; ---- Llamaradas al acertar: sprites 15 a 19, uno por carril, justo encima de su aro -------------------------------
+; Duran FLAME_TIME cuadros: chispazo, llama alta y se apaga (4 cuadros cada uno). El OAM solo se marca para copiarse cuando
+; cambia el cuadro de animación. Van de la línea 104 a la 119: los medidores terminan en la 103, así que nunca hay más de
+; 5 sprites por línea.
+DEF OAM_FLAME  EQU wOam + 4 * (NUM_LANES + 10)
+
+; Enciende la llamarada del carril wTryLane (desde TryHit, al acertar)
+FlameStart:
+    ld a, [wTryLane]
+    ld e, a
+    ld d, 0
+    ld hl, wFlame
+    add hl, de
+    ld [hl], FLAME_TIME
+    ld a, [wStarActive]
+    and a
+    ld a, FLAME_ATTR
+    jr z, .attr
+    ld a, FLAME_ATTR_STAR
+.attr:
+    ld hl, wFlameAttr
+    add hl, de
+    ld [hl], a
+    ld a, e
+    ld b, 0
+    ; (sigue en FlameSprite)
+
+; A = carril, B = cuadro de animación (0 a 2, o 3 para ocultarla)
+FlameSprite:
+    ld e, a
+    ld d, 0
+    ld hl, wFlameAttr
+    add hl, de
+    ld d, [hl]               ; D = atributos
+    ld a, e
+    add a
+    add a
+    add LOW(OAM_FLAME)
+    ld l, a
+    ld h, HIGH(OAM_FLAME)
+    ld a, b
+    cp 3
+    jr nz, .show
+    xor a
+    ld [hl], a               ; Y = 0: oculta
+    jr .dirty
+.show:
+    ld a, HIT_ROW * 8        ; 16 px arriba del aro
+    ld [hl+], a
+    ld a, e
+    swap a                   ; 16 * carril
+    add 40 + 4 + 8
+    ld [hl+], a
+    ld a, b
+    add a
+    add TILE_FLAME
+    ld [hl+], a
+    ld [hl], d
+.dirty:
+    ld a, 1
+    ld [wOamDirty], a
+    ret
+
+; Cada cuadro: avanza las llamaradas encendidas
+FlameTick:
+    ld hl, wFlame
+    ld e, 0
+.lane:
+    ld a, [hl]
+    and a
+    jr z, .next
+    dec a
+    ld [hl], a
+    ld b, a
+    and 3
+    jr nz, .next
+    ld a, b                  ; cuadro = 3 - t / 4 (t = 8 -> 1, 4 -> 2, 0 -> 3: se oculta)
+    srl a
+    srl a
+    cpl
+    add 4
+    ld b, a
+    push hl
+    push de
+    ld a, e
+    call FlameSprite
+    pop de
+    pop hl
+.next:
+    inc hl
+    inc e
+    ld a, e
+    cp NUM_LANES
+    jr nz, .lane
     ret
 
 ; ---- Medidores de vida (derecha) y de poder estelar (izquierda): 5 sprites de 8x16 apilados cada uno ---------------

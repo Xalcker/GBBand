@@ -38,6 +38,8 @@ HOLD_FRAMES = 3
 STATE_PLAY = 2
 STATE_PAUSE = 3
 STATE_END = 4  # la pantalla de resultados
+FLAME_TIME = 12        # cuadros que dura la llamarada al acertar (constants.inc)
+FLAME_ATTR_STAR = 0x06  # atributos de su sprite con el poder estelar (fuego azul)
 INSTRUMENTS = ("guitarra", "teclado", "bajo", "bateria")  # canal del APU de cada uno: CH1, CH2, CH3, CH4
 LANE_MASK = 0x1F
 
@@ -342,6 +344,43 @@ def visual_errors(r: Runner, chart: list[tuple[int, int]], s: int, t: int, schem
     return errors
 
 
+def gems_after_hit(r: Runner, chart: list[tuple[int, int]], s: int, t: int, lo: int = 8, hi: int = 16) -> tuple[int, int]:
+    """Notas del chart que debían tocarse hace `lo` a `hi` cuadros (ya cruzaron la línea de golpe): cuántas son y cuántas
+    siguen dibujadas en el fondo (una gema de su carril a menos de 3 px de su posición). Con el bot perfecto la gema
+    acertada se borra; sin tocar, sigue ahí."""
+    scy = r.pb.memory[0xFF42]
+    top_idx = {0: 0, 2: 1, 6: 2, 10: 3}
+    bot_idx = {4: 1, 8: 2, 12: 3}
+    lane_gems: dict[int, list[float]] = {l: [] for l in range(5)}
+    for l in range(5):
+        col = 5 + 2 * l
+        for row in range(32):
+            tile = r.pb.memory[0x9800 + row * 32 + col]
+            k = tile - 0x60 - 14 * l
+            if k in top_idx:
+                bg_y = row * 8 + 2 * top_idx[k]
+            elif k in bot_idx:
+                bg_y = (row - 1) * 8 + 2 * bot_idx[k]
+            elif l == 4 and tile == BAR_TILE:       # el bombo (batería)
+                bg_y = row * 8
+            elif l == 4 and tile in BAR_TOP_L:
+                bg_y = row * 8 + 2 * BAR_TOP_L[tile]
+            elif l == 4 and tile in BAR_BOT_L:
+                bg_y = (row - 1) * 8 + 2 * BAR_BOT_L[tile]
+            else:
+                continue
+            lane_gems[l].append(float((bg_y - scy) % 256))
+    checked = drawn = 0
+    for frame, mask in chart:
+        if not lo <= t - frame <= hi:
+            continue
+        for l in lanes_of(mask):
+            ideal = layout.HIT_Y - (frame - t) * s / 256
+            checked += 1
+            drawn += any(abs((y - ideal + 128) % 256 - 128) < 3 for y in lane_gems[l])
+    return checked, drawn
+
+
 # ---------------------------------------------------------------------------- una partida
 
 @dataclass
@@ -414,7 +453,7 @@ def enter_initials(r: Runner, text: str) -> None:
 def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, bot_name: str, out: Path,
              visual: bool = False, shots: tuple[int, ...] = (40, 400, 1200), seed: int = 1, no_fail: bool = False,
              pause_at: int | None = None, pause_frames: int = 40, ram=None, initials: str | None = None, use_star: bool = False,
-             options: dict[str, int] | None = None) -> Result:
+             options: dict[str, int] | None = None, check_erase: bool = False) -> Result:
     data = load_song(song)
     info = data.info
     chart = data.chart(instrument, difficulty)
@@ -458,7 +497,8 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
         releases: dict[int, int] = {}  # carril -> cuadro en que se suelta
         held: set[int] = set()
         state = {"prev_on": note_on_counts(r), "timeline": {}, "paused": False, "star_cool": 0, "max_energy": 0, "activations": 0, "was_active": 0, "last_t": -1,
-                 "sfx_starts": 0, "sfx_prev": 0, "sfx_ids": set(), "max_scx": 0, "shake_frames": 0, "sfx_times": []}
+                 "sfx_starts": 0, "sfx_prev": 0, "sfx_ids": set(), "max_scx": 0, "shake_frames": 0, "sfx_times": [],
+                 "flames": 0, "flames_star": 0, "erase_checked": 0, "erase_drawn": 0}
         hframe = lambda: int.from_bytes(r.read("hFrame", 2), "little")
 
         def on_isr_end(_ctx) -> None:
@@ -495,6 +535,12 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
             scx = r.read("hScx")[0]
             state["max_scx"] = max(state["max_scx"], scx if scx < 128 else 256 - scx)
             state["shake_frames"] += 1 if r.read("wShake")[0] else 0
+            # llamaradas que se encendieron en este cuadro (FlameStart pone FLAME_TIME y FlameTick ya restó uno)
+            flame_attr = r.read("wFlameAttr", 5)
+            for lane, left in enumerate(r.read("wFlame", 5)):
+                if left == FLAME_TIME - 1:
+                    state["flames"] += 1
+                    state["flames_star"] += 1 if flame_attr[lane] == FLAME_ATTR_STAR else 0
             cur = note_on_counts(r)
             for ch in range(4):
                 if cur[ch] != state["prev_on"][ch]:
@@ -502,6 +548,10 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
             state["prev_on"] = cur
             isr = r.read("wIsrLast")[0]
             isr_hist[isr] = isr_hist.get(isr, 0) + 1
+            if check_erase and n % 4 == 0:
+                c, d = gems_after_hit(r, chart, s, n)
+                state["erase_checked"] += c
+                state["erase_drawn"] += d
             if visual and n % 5 == 0 and lead_in - 150 < n < info["end_frame"] - 200:
                 errors.extend(e for e in visual_errors(r, chart, s, n, "B") if e != float("inf"))
             if n == info["end_frame"] - 120:
@@ -548,6 +598,8 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
         v["sfx_starts"], v["sfx_ids"], v["max_scx"], v["shake_frames"] = state["sfx_starts"], state["sfx_ids"], state["max_scx"], state["shake_frames"]
         v["sfx_times"] = state["sfx_times"]
         v["max_energy"], v["star_activations"] = state["max_energy"], state["activations"]
+        v["flames"], v["flames_star"] = state["flames"], state["flames_star"]
+        v["erase_checked"], v["erase_drawn"] = state["erase_checked"], state["erase_drawn"]
         if initials:
             enter_initials(r, initials)
             v["rec_text"] = bytes(r.read("wRecText", 20)).decode("ascii")

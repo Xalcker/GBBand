@@ -135,15 +135,15 @@ CgbBgPalettes:
     dw $1042, $211F, $0852, $0C21         ; 7: reflectores (cambian de color con cada tiempo)
 CgbBgPalettesEnd:
 
-; Sprites: los aros usan los colores de su carril (paleta 0 a 4)
+; Sprites: los aros usan los colores de su carril (paleta 0 a 4); 5 y 6 son las llamaradas
 CgbObjPalettes:
     dw $1842, $11C4, $2306, $7FFF
     dw $1842, $0C6E, $18DC, $7FFF
     dw $1842, $098E, $0F7F, $7FFF
     dw $1842, $38C3, $7186, $7FFF
     dw $1842, $04EE, $0A1F, $7FFF
-    dw $1842, $414A, $6252, $7FFF
-    dw $1842, $414A, $6252, $7FFF
+    dw $1842, $009F, $025F, $53FF          ; 5: llamarada (rojo, naranja y amarillo claro al centro)
+    dw $1842, $7D00, $7E86, $7FF8          ; 6: llamarada con el poder estelar (azul)
     dw $1842, $6B5A, $7BDE, $7FFF          ; 7: el medidor estelar mientras el poder está activo
 CgbObjPalettesEnd:
 
@@ -151,6 +151,7 @@ LoadPalettes:
     ld a, %11100100
     ldh [rBGP], a
     ldh [rOBP0], a
+    ld a, %01101100         ; OBP1 (llamarada en DMG): tonos al revés, centro claro y orilla oscura
     ldh [rOBP1], a
     ldh a, [hCGB]
     and a
