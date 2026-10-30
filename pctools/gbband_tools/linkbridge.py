@@ -13,11 +13,14 @@ par, un cuadro cada una, y el puente pasa los bytes con hooks en las rutinas de 
   esta consola era el esclavo, A es el byte que el maestro le entregó.
 
 Como cada consola corre un cuadro completo por turno, el esclavo recibe el byte hasta un cuadro después que en una
-consola real. El protocolo de link.asm no depende de eso (un byte por cuadro y mensajes con tipo).
+consola real. Y cuando un cuadro del maestro se atrasa, puede mandar dos bytes en un mismo turno sin que el esclavo
+alcance a volver a armarse: el segundo se pierde (`lost`), cosa que en una consola real casi no pasa. El protocolo de
+link.asm aguanta las dos cosas (mensajes con tipo, estado del menú repetido y cuenta regresiva repetida).
 """
 
 from __future__ import annotations
 
+import random
 from collections import deque
 from dataclasses import dataclass, field
 
@@ -38,8 +41,13 @@ class _End:
 class LinkBridge:
     """Conecta dos Runner (con símbolos) y los avanza a la par."""
 
-    def __init__(self, a: Runner, b: Runner):
+    def __init__(self, a: Runner, b: Runner, drop_rate: float = 0.0, seed: int = 1):
+        """`drop_rate` tira a propósito esa fracción de las transferencias, al azar (como un cable que falla), para
+        probar que el protocolo se recupera. La semilla hace que la prueba se repita igual."""
         self.ends = [_End(a), _End(b)]
+        self.lost = 0                   # bytes del maestro que no recibió nadie
+        self.drop_rate = drop_rate
+        self.rng = random.Random(seed)
         for i, end in enumerate(self.ends):
             sym = end.r.symbols
             for name, cb in (("SerialSend", self._on_send), ("SerialArm", self._on_arm), ("SerialOff", self._on_off),
@@ -75,12 +83,16 @@ class LinkBridge:
         if me.sending is not None:
             out, me.sending = me.sending, None
             me.sent += 1
-            if other.armed is not None:          # del otro lado hay un esclavo esperando: se cruzan los bytes
+            if self.drop_rate and self.rng.random() < self.drop_rate:   # falla a propósito: nadie recibe nada
+                regs.A = 0xFF
+                self.lost += 1
+            elif other.armed is not None:        # del otro lado hay un esclavo esperando: se cruzan los bytes
                 regs.A, other.armed = other.armed, None
                 other.pending.append(out)
                 pb = other.r.pb
                 pb.memory[0xFF0F] = pb.memory[0xFF0F] | IF_SERIAL
             else:                                 # nadie armado (o el otro también es maestro): se lee $FF
                 regs.A = 0xFF
+                self.lost += 1
         elif me.pending:
             regs.A = me.pending.popleft()
