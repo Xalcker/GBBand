@@ -31,6 +31,10 @@ InstrText:
 FailText:
     db "<  ACTIVADO  >", 0, 0
     db "< SIN FALLO  >", 0, 0
+PlayersText:
+    db "< 1 JUGADOR  >", 0, 0
+    db "< 2 JUG. VS  >", 0, 0
+    db "<2 JUG. COOP >", 0, 0
 ; NR51 con el CH1, CH2, CH3 o CH4 fuera de ambos lados: lo que se oye cuando el instrumento falla
 InstrNr51Muted: db $EE, $DD, $BB, $77
 
@@ -95,6 +99,7 @@ EndTextScreen:
 DEF TITLE_LOGO_ROW  EQU 1
 DEF TITLE_PRESS_ROW EQU 10
 DEF TITLE_PRESS_COL EQU 3
+DEF TITLE_PLAYERS_ROW EQU 8     ; JUGADORES (←/→): uno, VS o Co-Op por cable link
 DEF LOGO_WIDTH      EQU 18      ; tiles por renglón: 6 letras de 3 tiles (5 bloques y un espacio)
 DEF LOGO_ROWS       EQU 4
 DEF LOGO_COL        EQU (20 - LOGO_WIDTH) / 2  ; centrado en los 20 tiles de la pantalla
@@ -104,6 +109,9 @@ EnterTitle:
     call DrawLogo
     ld de, _SCRN0 + 32 * 6 + 1
     ld hl, TxtSubtitle
+    call PrintStr
+    call PlayersTextHL
+    ld de, _SCRN0 + 32 * TITLE_PLAYERS_ROW + TITLE_PRESS_COL
     call PrintStr
     ld de, _SCRN0 + 32 * TITLE_PRESS_ROW + TITLE_PRESS_COL
     ld hl, TxtPress
@@ -259,10 +267,47 @@ ENDC
     ldh [hPadNew], a
     ei
     bit PADB_START, b
+    jr nz, .start
+    ; ←/→ cambia JUGADORES (0 a 2, da la vuelta)
+    ld a, [wPlayers]
+    bit PADB_RIGHT, b
+    jr z, .notRight
+    inc a
+    cp 3
+    jr c, .setPlayers
+    xor a
+    jr .setPlayers
+.notRight:
+    bit PADB_LEFT, b
     ret z
+    sub 1
+    jr nc, .setPlayers
+    ld a, 2
+.setPlayers:
+    ld [wPlayers], a
+    xor a
+    call PlayMenuSfx            ; mover
+    call PlayersTextHL
+    ld b, 14
+    ld de, _SCRN0 + 32 * TITLE_PLAYERS_ROW + TITLE_PRESS_COL
+    jp QueueRaw
+.start:
     ld a, 1
     call PlayMenuSfx
+    ld a, [wPlayers]
+    and a
+    jp nz, EnterLink
     jp EnterMenu
+
+; HL = texto de JUGADORES de lo elegido. Usa A y DE.
+PlayersTextHL:
+    ld a, [wPlayers]
+    swap a                      ; * 16
+    ld e, a
+    ld d, 0
+    ld hl, PlayersText
+    add hl, de
+    ret
 
 ; ---- Menú -------------------------------------------------------------------------------------
 ; Cuatro renglones: canción, instrumento, dificultad y fallo. ↑/↓ cambia de renglón, ←/→ el valor, Start empieza.
