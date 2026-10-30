@@ -2,8 +2,9 @@
 ; link.asm - Cable link: controlador serie, mensajes y pantalla de conexión (2 jugadores)
 ;
 ; Cada byte que cruza el cable es parte de un mensaje: el primero (el tipo) lleva el bit 7 en 1 y los datos van en 0
-; (7 bits cada uno). $00 significa "nada que mandar" y $FF es lo que se lee cuando no hay nadie del otro lado: los dos
-; se ignoran entre mensajes. Un mensaje se encola completo (LinkSend), así que sus bytes cruzan seguidos.
+; (7 bits cada uno). $80 significa "nada que mandar" y $FF es lo que se lee cuando no hay nadie del otro lado: como
+; llevan el bit 7, los dos cortan el mensaje que se estuviera recibiendo, así que si se pierde un byte el mensaje se
+; tira en vez de completarse con basura. Un mensaje se encola completo (LinkSend), así que sus bytes cruzan seguidos.
 ;
 ; El maestro (reloj interno, jugador 1) manda un byte por cuadro desde el bucle principal (LinkPoll). El esclavo (reloj
 ; externo) arma el siguiente byte en la ISR serie en cuanto llega uno, así siempre tiene algo listo cuando el maestro
@@ -13,11 +14,30 @@
 ; llamó, llama como maestro LINK_CALL cuadros. Mientras busca repite su saludo (MSG_HELLO). Quien recibe el saludo
 ; completo del otro queda conectado con el papel que tenía en ese momento.
 ;
+; Conectados, LinkTick corre en cada cuadro desde el bucle principal (en cualquier estado): el maestro manda un byte y
+; los mensajes que se completan quedan en variables (wLinkPeer, wPeerMenu) con su bit en wLinkGot. Si en LINK_TIMEOUT
+; cuadros no llega nada, se da la conexión por perdida.
+;
+; Menú de 2 jugadores: cada consola manda su estado (MSG_MENU) cuando cambia y cada LINK_REFRESH cuadros. El jugador 2
+; sigue la canción del 1 (y en VS, su dificultad). Start marca "listo"; con los dos listos empieza el arranque
+; sincronizado (ver LinkWaitFrame). Todo lo que importa se repite hasta que el otro contesta, así que perder un byte no
+; atora nada.
+;
 ; Las pruebas conectan dos PyBoy enganchándose a SerialSend, SerialArm, SerialGot y SerialOff (ver linkbridge.py).
 ; =============================================================================
 
-DEF LINK_IDLE EQU $00
-DEF MSG_HELLO EQU $81
+DEF LINK_IDLE EQU $80           ; "nada que mandar": con el bit 7, así corta un mensaje al que se le perdió un byte
+DEF MSG_HELLO EQU $81           ; versión, hash de la lista de canciones (2 bytes)
+DEF MSG_MENU  EQU $82           ; canción, instrumento, dificultad, banderas (bit 0 listo, bit 1 sin fallo)
+DEF MSG_START EQU $83           ; canción (el 1 al 2: prepárala; se repite hasta que el 2 contesta MSG_SET)
+DEF MSG_SET   EQU $84           ; el 2 al 1: 0 = ya preparé la canción, 1 = ya tengo la cuenta regresiva
+DEF MSG_GO    EQU $85           ; cuadros que faltan para echarla a andar (el 1 al 2; se repite hasta llegar a 0)
+
+DEF GOTB_HELLO EQU 0            ; bits de wLinkGot
+DEF GOTB_MENU  EQU 1
+DEF GOTB_START EQU 2
+DEF GOTB_SET   EQU 3
+DEF GOTB_GO    EQU 4
 
 DEF LINK_SEARCH EQU 0
 DEF LINK_OK     EQU 1
@@ -25,6 +45,12 @@ DEF LINK_WRONG  EQU 2
 
 DEF LINK_LISTEN_MIN EQU 30      ; cuadros esperando como esclavo: de 30 a 93 (al azar)
 DEF LINK_CALL       EQU 24      ; cuadros llamando como maestro (el saludo del otro tarda a lo más 7)
+DEF LINK_TO_MENU    EQU 60      ; cuadros con "CONECTADO" en pantalla antes de pasar al menú
+DEF LINK_TIMEOUT    EQU 120     ; cuadros sin oír al otro para dar la conexión por perdida
+DEF LINK_REFRESH    EQU 8       ; cuadros entre dos MSG_MENU aunque nada cambie (si uno se pierde, el siguiente lo repara)
+DEF LINK_COUNTDOWN  EQU 30      ; cuadros desde que el jugador 1 da la salida hasta que los dos empiezan
+DEF LINK_DEADLINE   EQU 12      ; cuadros antes del final en que el 1 decide si el 2 tiene la cuenta (ver LinkWaitFrame):
+                                ; antes, ~5 confirmaciones del 2; después, ~4 cuentas nuevas si la vuelve a empezar
 
 DEF LINK_ROW_STATUS EQU 8
 
@@ -102,23 +128,34 @@ LinkNextOut:
     ld a, [hl]
     ret
 
-; Encola B bytes de HL (un mensaje completo). Usa A y DE.
+; Encola el mensaje de B bytes de HL (tipo y datos) y, al final, su suma de comprobación: (tipo + datos) & $7F.
+; Usa A, C y DE.
 LinkSend:
     ldh a, [hLinkOutW]
     ld e, a
     ld d, HIGH(wLinkOut)
+    ld c, 0
 .loop:
     ld a, [hl+]
     ld [de], a
+    add c
+    ld c, a
+    call .next
+    dec b
+    jr nz, .loop
+    ld a, c
+    and $7F
+    ld [de], a
+    call .next
+    ld a, e                     ; se publica al final: la ISR nunca ve el mensaje a medias
+    ldh [hLinkOutW], a
+    ret
+.next:
     ld a, e
     inc a
     and $0F
     or LOW(wLinkOut)
     ld e, a
-    dec b
-    jr nz, .loop
-    ld a, e                     ; se publica al final: la ISR nunca ve el mensaje a medias
-    ldh [hLinkOutW], a
     ret
 
 ; Z = 1 si no queda nada por mandar
@@ -152,6 +189,8 @@ LinkReset:
     xor a
     ld [wLinkType], a
     ld [wLinkHeard], a
+    ld [wLinkGot], a
+    ld [wLinkSilence], a
     ldh a, [rIF]
     and ~IEF_SERIAL
     ldh [rIF], a
@@ -191,8 +230,38 @@ LinkCall:
     ret
 
 ; ---- Una vez por cuadro -------------------------------------------------------------------------------------------
-; El maestro manda el siguiente byte; luego se leen los que llegaron. Devuelve A = tipo del mensaje que se completó
-; (sus datos en wLinkBuf) o 0 si no se completó ninguno; si se completa uno, los bytes que siguen esperan al otro cuadro.
+; Bucle principal, antes del manejador del estado, mientras el cable está encendido
+LinkTick:
+    call LinkPoll
+    ld a, [wLinkState]
+    cp LINK_OK
+    ret nz
+    ld hl, wLinkHeard
+    ld a, [hl]
+    ld [hl], 0
+    and a
+    ld hl, wLinkSilence
+    jr z, .silent
+    ld [hl], 0
+    ret
+.silent:
+    inc [hl]
+    ld a, [hl]
+    cp LINK_TIMEOUT
+    ret c
+    ; se perdió la conexión: en el menú se vuelve al título; jugando, se sigue solo
+    call LinkStop
+    xor a
+    ld [wPlayers], a
+    ld a, [wState]
+    cp STATE_MENU
+    jp z, EnterTitle
+    cp STATE_LINK
+    jp z, EnterTitle
+    ret
+
+; El maestro manda el siguiente byte; luego se leen los que llegaron. Cada mensaje completo se copia a su variable y
+; enciende su bit en wLinkGot.
 LinkPoll:
     ldh a, [hLinkMaster]
     and a
@@ -205,7 +274,7 @@ LinkPoll:
     ld b, a
     ldh a, [hLinkInR]
     cp b
-    jr z, .none
+    ret z                       ; no queda nada por leer
     ld l, a
     ld h, HIGH(wLinkIn)
     inc a
@@ -237,13 +306,14 @@ LinkPoll:
 .data:
     ld a, [wLinkType]
     and a
-    jr z, .read                 ; "nada que mandar" o un dato suelto
+    jr z, .read                 ; un dato suelto (de un mensaje cortado)
     sub MSG_HELLO
     ld e, a
     ld d, 0
     ld hl, LinkLens
     add hl, de
     ld c, [hl]                  ; C = bytes de datos del mensaje
+    inc c                       ; (más la suma de comprobación)
     ld a, [wLinkPos]
     ld e, a
     ld hl, wLinkBuf
@@ -253,20 +323,71 @@ LinkPoll:
     ld [wLinkPos], a
     cp c
     jr c, .read
-    ld a, [wLinkType]           ; completo
+    ; completo: la suma de comprobación debe coincidir (si no, se perdieron bytes de dos mensajes y se pegaron)
+    dec c                       ; C = bytes de datos
+    ld a, [wLinkType]
     ld b, a
+    ld e, c
+    ld hl, wLinkBuf
+.sum:
+    ld a, [hl+]
+    add b
+    ld b, a
+    dec e
+    jr nz, .sum
+    ld a, b
+    and $7F
+    cp [hl]
+    jr z, .valid
     xor a
     ld [wLinkType], a
-    ld a, b
-    ret
-.none:
+    jp .read
+.valid:
+    ; los datos van a su variable (tabla LinkDest) y se enciende su bit en wLinkGot
+    ld a, [wLinkType]
+    sub MSG_HELLO
+    ld b, a
+    add a
+    add b                       ; * 3
+    ld e, a
+    ld d, 0
+    ld hl, LinkDest
+    add hl, de
+    ld a, [hl+]
+    ld e, a
+    ld a, [hl+]
+    ld d, a
+    ld b, [hl]                  ; B = bit de wLinkGot
+    ld hl, wLinkBuf
+.copy:
+    ld a, [hl+]
+    ld [de], a
+    inc de
+    dec c
+    jr nz, .copy
+    ld a, [wLinkGot]
+    or b
+    ld [wLinkGot], a
     xor a
-    ret
+    ld [wLinkType], a
+    jp .read
 
-; Bytes de datos de cada tipo de mensaje, desde MSG_HELLO
+; Bytes de datos de cada tipo de mensaje (sin la suma de comprobación), desde MSG_HELLO
 LinkLens:
-    db LINK_HELLO_LEN
+    db LINK_HELLO_LEN, LINK_MENU_LEN, 1, 1, 1
 LinkLensEnd:
+; A dónde se copian sus datos y qué bit encienden en wLinkGot
+LinkDest:
+    dw wLinkPeer
+    db 1 << GOTB_HELLO
+    dw wPeerMenu
+    db 1 << GOTB_MENU
+    dw wPeerStart
+    db 1 << GOTB_START
+    dw wPeerSet
+    db 1 << GOTB_SET
+    dw wPeerGo
+    db 1 << GOTB_GO
 
 HelloMsg:
     db MSG_HELLO, LINK_VERSION, SONG_LIST_HASH & $7F, (SONG_LIST_HASH >> 7) & $7F
@@ -352,15 +473,23 @@ LinkFrame:
     jp EnterTitle
 .noCancel:
     ld a, [wLinkState]
-    cp LINK_SEARCH
-    jr nz, .poll
-    ; buscando: siempre hay un saludo por mandar
+    cp LINK_WRONG
+    jr z, .poll
+    ; buscando y recién conectados: siempre hay un saludo por mandar (conectados, para que el otro también lo complete).
+    ; A veces se deja un hueco al azar antes de repetirlo: así una falla periódica del cable no corta siempre el mismo
+    ; byte del saludo.
     call LinkOutEmpty
+    jr nz, .queued
+    ldh a, [rDIV]
+    and 8
     jr nz, .queued
     ld hl, HelloMsg
     ld b, HelloMsgEnd - HelloMsg
     call LinkSend
 .queued:
+    ld a, [wLinkState]
+    cp LINK_SEARCH
+    jr nz, .poll
     ; si llegó algo del otro lado se conserva el papel; si no, se cambia al acabar el tiempo
     ld hl, wLinkHeard
     ld a, [hl]
@@ -378,21 +507,20 @@ LinkFrame:
 .toListen:
     call LinkListen
 .poll:
-    call LinkPoll
-    cp MSG_HELLO
-    ret nz
     ld a, [wLinkState]
+    cp LINK_OK
+    jr nz, .notOk
+    ld hl, wLinkTimer           ; conectados: "CONECTADO" un momento y al menú
+    dec [hl]
+    ret nz
+    jp EnterMenu
+.notOk:
+    ld hl, wLinkGot
+    bit GOTB_HELLO, [hl]
+    ret z
+    res GOTB_HELLO, [hl]
     cp LINK_SEARCH
     ret nz                      ; (los saludos que quedaban en camino)
-    ld hl, wLinkBuf
-    ld de, wLinkPeer
-    ld b, LINK_HELLO_LEN
-.copy:
-    ld a, [hl+]
-    ld [de], a
-    inc de
-    dec b
-    jr nz, .copy
     ; misma versión del protocolo y misma lista de canciones
     ld hl, HelloMsg + 1
     ld de, wLinkPeer
@@ -407,6 +535,19 @@ LinkFrame:
     jr nz, .cmp
     ld a, LINK_OK
     ld [wLinkState], a
+    ld a, LINK_TO_MENU
+    ld [wLinkTimer], a
+    xor a
+    ld [wLinkSilence], a
+    ld [wReady], a
+    ld [wLinkStarting], a
+    ld hl, wPeerMenu            ; todavía no se sabe qué eligió el otro
+    ld a, $FF
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl], 0
+    ld [wPeerInstrSeen], a
     ldh a, [hLinkMaster]
     and a
     ld hl, LinkTxtOk1
@@ -431,3 +572,456 @@ LinkQueueStatus:
     ld b, 20
     ld de, _SCRN0 + 32 * (LINK_ROW_STATUS + 1)
     jp QueueRaw
+
+; ---- Menú de 2 jugadores ----------------------------------------------------------------------------------------
+; Fila 16: lo que eligió el otro ("J2 GUITARRA LISTO"); fila 17: "PRESIONA START" o "LISTO".
+TxtReady:     db "    LISTO     ", 0      ; (14 caracteres, como TxtPress)
+TxtPeerJ1:    db "J1 "
+TxtPeerJ2:    db "J2 "
+TxtPeerReady: db "LISTO   "
+TxtBlank8:    db "        "
+
+; EnterMenu, antes de leer la canción: el jugador 2 toma la del 1 (y en VS su dificultad)
+MenuLinkEnter:
+    xor a
+    ld [wReady], a
+    ld [wLinkStarting], a
+    ld a, LINK_REFRESH
+    ld [wMenuRefresh], a
+    ld a, $FF
+    ld [wMenuSent], a           ; el primer cuadro manda el estado completo
+    ldh a, [hLinkMaster]
+    and a
+    jr nz, .line
+    ld a, [wPeerMenu]
+    cp NUM_SONGS
+    jr nc, .line
+    ld [wSong], a
+    ld a, [wPlayers]
+    cp 1
+    jr nz, .line
+    ld a, [wPeerMenu + 2]
+    cp 4
+    jr nc, .line
+    ld [wDifficulty], a
+.line:
+    jp QueuePeerLine
+
+; MenuFrame con el cable encendido
+MenuFrameLink:
+    call MenuLinkSync
+    ld a, [wState]
+    cp STATE_MENU
+    ret nz                      ; (empezó la canción)
+    di
+    ldh a, [hPadNew]
+    ld b, a
+    xor a
+    ldh [hPadNew], a
+    ei
+    bit PADB_B, b
+    jr z, .noB
+    ld a, 2
+    call PlayMenuSfx            ; volver
+    ld a, [wReady]
+    and a
+    jr z, .leave
+    xor a                       ; B quita el "listo"
+    ld [wReady], a
+    jp QueueReadyLine
+.leave:
+    call LinkStop               ; el otro se da cuenta al no oír nada (LINK_TIMEOUT)
+    xor a
+    ld [wPlayers], a
+    jp EnterTitle
+.noB:
+    ld a, [wReady]
+    and a
+    ret nz                      ; listo: ya no se cambia nada
+    bit PADB_START, b
+    jr z, .noStart
+    ld a, [wPlayers]            ; Co-Op: no se puede tocar el instrumento del otro
+    cp 2
+    jr nz, .ready
+    ld a, [wPeerMenu + 1]
+    ld c, a
+    ld a, [wInstrument]
+    cp c
+    jr nz, .ready
+    ld a, 2
+    jp PlayMenuSfx
+.ready:
+    ld a, 1
+    ld [wReady], a
+    call PlayMenuSfx            ; aceptar
+    jp QueueReadyLine
+.noStart:
+    ; el jugador 2 no cambia la canción (ni, en VS, la dificultad)
+    ldh a, [hLinkMaster]
+    and a
+    jr nz, .input
+    ld a, [wMenuRow]
+    and a
+    jr z, .lock
+    cp 2
+    jr nz, .input
+    ld a, [wPlayers]
+    cp 1
+    jr nz, .input
+.lock:
+    ld a, b
+    and LOW(~((1 << PADB_LEFT) | (1 << PADB_RIGHT)))
+    ld b, a
+.input:
+    ld a, b                     ; (sin opciones con 2 jugadores: cambiarían la velocidad de uno solo)
+    and LOW(~((1 << PADB_START) | (1 << PADB_B) | (1 << PADB_SELECT)))
+    ld b, a
+    jp MenuInput
+
+; Lo que llegó del otro, el estado propio si cambió y, en el jugador 1, la salida con los dos listos
+MenuLinkSync:
+    ld hl, wLinkGot
+    bit GOTB_MENU, [hl]
+    jr z, .noMenu
+    res GOTB_MENU, [hl]
+    call MenuApplyPeer
+    call QueuePeerLine
+.noMenu:
+    ld hl, wLinkGot
+    bit GOTB_START, [hl]
+    jr z, .noStartMsg
+    res GOTB_START, [hl]
+    ldh a, [hLinkMaster]
+    and a
+    jp z, StartSongLink         ; el jugador 2 prepara la canción en cuanto lo recibe
+.noStartMsg:
+    ; el estado propio, si cambió o toca repetirlo, y si la cola está libre (si no, en el cuadro siguiente)
+    ld hl, wMenuRefresh
+    dec [hl]
+    jr nz, .noRefresh
+    ld [hl], LINK_REFRESH
+    ld a, $FF
+    ld [wMenuSent], a
+.noRefresh:
+    call LinkOutEmpty
+    jr nz, .sent
+    call MenuBuildState
+    jr z, .sent
+    ld hl, wMenuMsg + 1
+    ld de, wMenuSent
+    ld b, LINK_MENU_LEN
+.save:
+    ld a, [hl+]
+    ld [de], a
+    inc de
+    dec b
+    jr nz, .save
+    ld hl, wMenuMsg
+    ld b, LINK_MENU_LEN + 1
+    call LinkSend
+.sent:
+    ; el jugador 1 da la salida: los dos listos, la misma canción y, en VS, la misma dificultad (en Co-Op, instrumentos
+    ; distintos)
+    ldh a, [hLinkMaster]
+    and a
+    ret z
+    ld a, [wReady]
+    and a
+    ret z
+    ld a, [wPeerMenu + 3]
+    bit 0, a
+    ret z
+    ld a, [wPeerMenu]
+    ld b, a
+    ld a, [wSong]
+    cp b
+    ret nz
+    ld a, [wPlayers]
+    cp 1
+    jr nz, .coop
+    ld a, [wPeerMenu + 2]
+    ld b, a
+    ld a, [wDifficulty]
+    cp b
+    ret nz
+    jr .go
+.coop:
+    ld a, [wPeerMenu + 1]
+    ld b, a
+    ld a, [wInstrument]
+    cp b
+    ret z
+.go:
+    jp StartSongLink            ; (MSG_START lo repite LinkWaitFrame hasta que el 2 conteste)
+
+; Arma MSG_MENU en wMenuMsg con lo elegido. Z = 1 si es lo mismo que ya se mandó.
+MenuBuildState:
+    ld hl, wMenuMsg
+    ld a, MSG_MENU
+    ld [hl+], a
+    ld a, [wSong]
+    ld [hl+], a
+    ld a, [wInstrument]
+    ld [hl+], a
+    ld a, [wDifficulty]
+    ld [hl+], a
+    ld a, [wNoFail]
+    add a
+    ld b, a
+    ld a, [wReady]
+    or b
+    ld [hl], a
+    ld hl, wMenuMsg + 1
+    ld de, wMenuSent
+    ld b, LINK_MENU_LEN
+.cmp:
+    ld a, [de]
+    cp [hl]
+    ret nz
+    inc hl
+    inc de
+    dec b
+    jr nz, .cmp
+    ret
+
+; Jugador 2: sigue la canción del 1 y, en VS, su dificultad; cuando el 1 cambia de instrumento en VS, lo copia (y luego
+; puede cambiarlo). Si cambia la canción o la dificultad, deja de estar "listo".
+MenuApplyPeer:
+    ldh a, [hLinkMaster]
+    and a
+    ret nz
+    ld a, [wPeerMenu]
+    cp NUM_SONGS
+    ret nc
+    ld b, a
+    ld a, [wSong]
+    cp b
+    jr z, .sameSong
+    ld a, b
+    ld [wSong], a
+    call MenuLoadSong
+    call QueueSongText
+    call QueueInstrument
+    call RefreshRecord
+    call .unready
+.sameSong:
+    ld a, [wPlayers]
+    cp 1
+    ret nz                      ; Co-Op: cada quien su dificultad y su instrumento
+    ld a, [wPeerMenu + 2]
+    cp 4
+    jr nc, .instr
+    ld b, a
+    ld a, [wDifficulty]
+    cp b
+    jr z, .instr
+    ld a, b
+    ld [wDifficulty], a
+    call QueueDifficulty
+    call RefreshRecord
+    call .unready
+.instr:
+    ld a, [wPeerMenu + 1]
+    ld hl, wPeerInstrSeen
+    cp [hl]
+    ret z
+    ld [hl], a
+    cp 4
+    ret nc
+    ld b, a
+    call InstrAvailable
+    ret nc
+    ld a, b
+    ld [wInstrument], a
+    call QueueInstrument
+    jp RefreshRecord
+.unready:
+    ld a, [wReady]
+    and a
+    ret z
+    xor a
+    ld [wReady], a
+    jp QueueReadyLine
+
+QueueReadyLine:
+    ld a, [wReady]
+    and a
+    ld hl, TxtPress
+    jr z, .put
+    ld hl, TxtReady
+.put:
+    ld b, 14
+    ld de, _SCRN0 + 32 * 17 + 3
+    jp QueueRaw
+
+; Fila 16: "J2 GUITARRA LISTO" (el número del otro, su instrumento y si está listo)
+QueuePeerLine:
+    ld de, wPeerLine
+    ldh a, [hLinkMaster]
+    and a
+    ld hl, TxtPeerJ2            ; esta consola es el jugador 1: el otro es el 2
+    jr nz, .num
+    ld hl, TxtPeerJ1
+.num:
+    ld b, 3
+    call .copy
+    ld a, [wPeerMenu + 1]
+    cp 4
+    ld hl, TxtBlank8
+    jr nc, .instr
+    swap a
+    add 3                       ; el nombre dentro de "<  GUITARRA  >"
+    ld c, a
+    ld b, 0
+    ld hl, InstrText
+    add hl, bc
+.instr:
+    ld b, 8
+    call .copy
+    ld a, ' '
+    ld [de], a
+    inc de
+    ld a, [wPeerMenu + 3]
+    bit 0, a
+    ld hl, TxtPeerReady
+    jr nz, .ready
+    ld hl, TxtBlank8
+.ready:
+    ld b, 8
+    call .copy
+    ld hl, wPeerLine
+    ld b, 20
+    ld de, _SCRN0 + 32 * 16
+    jp QueueRaw
+.copy:
+    ld a, [hl+]
+    ld [de], a
+    inc de
+    dec b
+    jr nz, .copy
+    ret
+
+; El 1 con los dos listos y el 2 al recibir MSG_START: prepara la canción y espera en LinkWaitFrame (BeginPlay)
+StartSongLink:
+    xor a
+    ld [wLinkStarting], a
+    ld [wReady], a
+    ld [wPeerMenu + 3], a       ; el otro deja de estar "listo" hasta que lo vuelva a decir
+    ld [wOptSpeed], a           ; a velocidad normal y sin práctica: si no, las consolas se desincronizan
+    ld [wOptPractice], a
+    ld a, $FF
+    ld [wMenuSent], a
+    ld a, [wLinkGot]
+    and LOW(~((1 << GOTB_START) | (1 << GOTB_SET) | (1 << GOTB_GO)))
+    ld [wLinkGot], a
+    jp StartSong
+
+; ---- Arranque sincronizado ----------------------------------------------------------------------------------------
+; Cada consola tarda distinto en preparar la canción con el LCD apagado (la CGB limpia dos bancos de VRAM), así que
+; BeginPlay no la echa a andar: espera aquí con la autopista en pantalla. El jugador 1 repite MSG_START hasta que el 2
+; contesta MSG_SET 0 (ya preparó la suya); entonces cuenta LINK_COUNTDOWN cuadros y repite MSG_GO con los que faltan.
+; El 2 toma la cuenta del último que le llegó y contesta MSG_SET 1 mientras cuenta (y MSG_SET 0 mientras no la tiene).
+; Los dos echan a andar la canción al llegar a 0. A LINK_DEADLINE cuadros del final, si lo último que el 1 oyó del 2 fue
+; MSG_SET 0 (no le ha llegado la cuenta), la vuelve a empezar; el 2 nunca empieza sin cuenta, así que nadie arranca solo.
+LinkWaitFrame:
+    di
+    xor a
+    ldh [hPadNew], a            ; (los botones no hacen nada mientras tanto)
+    ei
+    ldh a, [hLinkMaster]
+    and a
+    jr nz, .master
+    ; jugador 2
+    ld hl, wLinkGot
+    bit GOTB_GO, [hl]
+    jr z, .noGo
+    res GOTB_GO, [hl]
+    ld a, [wPeerGo]
+    and a
+    jr nz, .take
+    inc a
+.take:
+    ld [wLinkStarting], a
+.noGo:
+    ld a, [wLinkStarting]
+    and a
+    jr z, .slaveReply
+    dec a
+    ld [wLinkStarting], a
+    jr z, .play
+.slaveReply:
+    call LinkOutEmpty           ; MSG_SET: 0 = ya preparé la canción, 1 = ya tengo la cuenta
+    ret nz
+    ld a, [wLinkStarting]
+    and a
+    jr z, .set
+    ld a, 1
+.set:
+    ld b, a
+    ld a, MSG_SET
+    jr .send
+.master:
+    ld hl, wLinkGot
+    bit GOTB_SET, [hl]
+    jr z, .noSet
+    res GOTB_SET, [hl]
+    ld a, [wLinkStarting]
+    and a
+    jr nz, .ack
+    ld a, LINK_COUNTDOWN        ; el 2 ya preparó la canción: empieza la cuenta
+    ld [wLinkStarting], a
+    ld a, $FF                   ; todavía no se sabe si le llegó
+    ld [wLinkAcked], a
+    ret
+.ack:
+    ld a, [wPeerSet]            ; lo último que dijo el 2: 0 = sin cuenta, 1 = con cuenta
+    ld [wLinkAcked], a
+.noSet:
+    ld a, [wLinkStarting]
+    and a
+    jr nz, .count
+    call LinkOutEmpty           ; todavía sin respuesta: repite MSG_START
+    ret nz
+    ld a, [wSong]
+    ld b, a
+    ld a, MSG_START
+    jr .send
+.count:
+    dec a
+    ld [wLinkStarting], a
+    jr z, .play
+    cp LINK_DEADLINE
+    jr nz, .repeatGo
+    ld a, [wLinkAcked]          ; lo último del 2 fue "sin cuenta": vuelve a empezarla
+    and a
+    jr nz, .repeatGo
+    ld a, LINK_COUNTDOWN
+    ld [wLinkStarting], a
+    ld a, $FF
+    ld [wLinkAcked], a
+.repeatGo:
+    ; repite la cuenta cada vez que se vacía la cola. Si aquí faltan K cuadros, el mensaje termina de salir (con su suma
+    ; de comprobación) en el LinkPoll de dentro de 3 cuadros, cuando falten K - 3; el 2 lo atiende en ese mismo cuadro y
+    ; descuenta uno, así que se manda K - 2.
+    call LinkOutEmpty
+    ret nz
+    ld a, [wLinkStarting]
+    sub 2
+    ret c
+    ret z
+    ld b, a
+    ld a, MSG_GO
+; A = tipo, B = dato: encola un mensaje de un byte de datos
+.send:
+    ld [wMenuMsg], a
+    ld a, b
+    ld [wMenuMsg + 1], a
+    ld hl, wMenuMsg
+    ld b, 2
+    jp LinkSend
+.play:
+    ld a, 1
+    ld [wPlaying], a
+    ld a, STATE_PLAY
+    ld [wState], a
+    ret
