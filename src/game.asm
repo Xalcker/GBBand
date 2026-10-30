@@ -10,10 +10,13 @@ TxtInstr:    db " INSTRUMENTO", 0
 TxtDiff:     db " DIFICULTAD", 0
 TxtFail:     db " FALLO", 0
 TxtPress:    db "PRESIONA START", 0
+TxtPressOff: db "              ", 0       ; (mismo largo que TxtPress: lo borra al parpadear)
 TxtBack:     db "B:VOLVER  SELECT:OPC", 0
 TxtSubtitle: db "RITMO PARA GAME BOY", 0
-TxtNoRel:    db "PROYECTO DE AFICIONADOS", 0
-TxtNoRel2:    db "SIN RELACION CON NINTENDO", 0
+TxtAiMade:   db "CODIGO HECHO POR IA", 0
+TxtNoRel:    db "PROYECTO AFICIONADO", 0
+TxtNoRel2:   db "SIN RELACION CON", 0
+TxtNoRel3:   db "NINTENDO", 0
 ; 14 caracteres cada una, con relleno a 16 para indexar con (valor << 4)
 DiffText:
     db "<   FACIL    >", 0, 0
@@ -89,23 +92,37 @@ EndTextScreen:
     ret
 
 ; ---- Título -----------------------------------------------------------------------------------
+DEF TITLE_LOGO_ROW  EQU 1
+DEF TITLE_PRESS_ROW EQU 10
+DEF TITLE_PRESS_COL EQU 3
+DEF LOGO_WIDTH      EQU 18      ; tiles por renglón: 6 letras de 3 tiles (5 bloques y un espacio)
+DEF LOGO_ROWS       EQU 4
+DEF LOGO_COL        EQU (20 - LOGO_WIDTH) / 2  ; centrado en los 20 tiles de la pantalla
+
 EnterTitle:
     call BeginTextScreen
-    ld de, _SCRN0 + 32 * 5 + 7
-    ld hl, TxtTitle
-    call PrintStr
-    ld de, _SCRN0 + 32 * 7 + 1
+    call DrawLogo
+    ld de, _SCRN0 + 32 * 6 + 1
     ld hl, TxtSubtitle
     call PrintStr
-    ld de, _SCRN0 + 32 * 12 + 3
+    ld de, _SCRN0 + 32 * TITLE_PRESS_ROW + TITLE_PRESS_COL
     ld hl, TxtPress
     call PrintStr
-    ld de, _SCRN0 + 32 * 16 + 0
+    ld de, _SCRN0 + 32 * 13 + 1
+    ld hl, TxtAiMade
+    call PrintStr
+    ld de, _SCRN0 + 32 * 15 + 1
     ld hl, TxtNoRel
     call PrintStr
-    ld de, _SCRN0 + 32 * 17 + 0
+    ld de, _SCRN0 + 32 * 16 + 2
     ld hl, TxtNoRel2
     call PrintStr
+    ld de, _SCRN0 + 32 * 17 + 6
+    ld hl, TxtNoRel3
+    call PrintStr
+    ldh a, [hFrame]
+    and $20
+    ld [wTitleBlink], a
     ld a, STATE_TITLE
     ld [wState], a
     call EndTextScreen
@@ -143,6 +160,65 @@ StartTitleMusic:
     ret
 ENDC
 
+; Dibuja el logo (LCD apagado). En CGB cada letra toma el color de un carril (paletas 1 a 5).
+DrawLogo:
+    ld de, _SCRN0 + 32 * TITLE_LOGO_ROW + LOGO_COL
+    ld hl, LogoTiles
+    ld b, LOGO_ROWS
+.tiles:
+    call CopyLogoLine
+    dec b
+    jr nz, .tiles
+    ldh a, [hCGB]
+    and a
+    ret z
+    ld a, 1
+    ldh [rVBK], a
+    ld de, _SCRN0 + 32 * TITLE_LOGO_ROW + LOGO_COL
+    ld b, LOGO_ROWS
+.pals:
+    ld hl, LogoPals             ; (la misma fila de paletas en los 4 renglones)
+    call CopyLogoLine
+    dec b
+    jr nz, .pals
+    xor a
+    ldh [rVBK], a
+    ret
+
+; Copia LOGO_WIDTH bytes de HL a DE y deja DE al principio del renglón siguiente del mapa
+CopyLogoLine:
+    ld c, LOGO_WIDTH
+.copy:
+    ld a, [hl+]
+    ld [de], a
+    inc de
+    dec c
+    jr nz, .copy
+    ld a, e
+    add 32 - LOGO_WIDTH
+    ld e, a
+    ret nc
+    inc d
+    ret
+
+LogoPals:
+    db 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 1, 1, 1
+
+; El logo se dibuja con "pixeles gordos" de 4x4: cada tile tiene 2x2 de ellos. BIG_ROW toma dos renglones de texto
+; ('#' = lleno) y produce los tiles con los bloques que tocan (TILE_LOGO + máscara, ver logo.tiles).
+MACRO BIG_ROW
+    ASSERT STRLEN(\1) == LOGO_WIDTH * 2 && STRLEN(\2) == LOGO_WIDTH * 2, "Renglón del logo de largo incorrecto"
+    FOR I, LOGO_WIDTH
+        db TILE_LOGO | (STRCMP(STRSLICE(\1, I * 2, I * 2 + 1), "#") == 0) << 3 | (STRCMP(STRSLICE(\1, I * 2 + 1, I * 2 + 2), "#") == 0) << 2 | (STRCMP(STRSLICE(\2, I * 2, I * 2 + 1), "#") == 0) << 1 | (STRCMP(STRSLICE(\2, I * 2 + 1, I * 2 + 2), "#") == 0)
+    ENDR
+ENDM
+
+LogoTiles:
+    BIG_ROW ".###..####..####...###..#...#.####..", "#...#.#...#.#...#.#...#.##..#.#...#."
+    BIG_ROW "#.....#...#.#...#.#...#.#.#.#.#...#.", "#.###.####..####..#####.#..##.#...#."
+    BIG_ROW "#...#.#...#.#...#.#...#.#...#.#...#.", "#...#.#...#.#...#.#...#.#...#.#...#."
+    BIG_ROW ".###..####..####..#...#.#...#.####..", "...................................."
+
 TitleFrame:
 IF DEF(HAS_TITLE_MUSIC)
     call FillAudioRing
@@ -160,6 +236,22 @@ IF DEF(HAS_TITLE_MUSIC)
     sbc d
     call nc, StartTitleMusic
 ENDC
+    ; "PRESIONA START" parpadea: se escribe o se borra cuando cambia el bit 5 del contador de cuadros
+    ldh a, [hFrame]
+    and $20
+    ld hl, wTitleBlink
+    cp [hl]
+    jr z, .input
+    ld [hl], a
+    and a
+    ld hl, TxtPress
+    jr z, .show
+    ld hl, TxtPressOff
+.show:
+    ld b, TxtPressOff - TxtPress - 1
+    ld de, _SCRN0 + 32 * TITLE_PRESS_ROW + TITLE_PRESS_COL
+    call QueueRaw
+.input:
     di
     ldh a, [hPadNew]
     ld b, a

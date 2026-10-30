@@ -63,6 +63,7 @@ DEF TILE_TAIL_L   EQU $0E       ; cola de las notas sostenidas (mitad izquierda 
 DEF TILE_TAIL_R   EQU $0F
 DEF TILE_GEM      EQU $60       ; 14 tiles por carril (ver gemgen.py)
 DEF TILE_BAR      EQU $A6       ; el bombo: 13 tiles (llena y, por desplazamiento, arriba/abajo izquierda/derecha)
+DEF TILE_LOGO     EQU $C0       ; 16 tiles: bloques de 4x4 px del logo del título (ver logo.tiles)
 DEF GEM_STRIDE    EQU 14
 
 ; --- Audio ----------------------------------------------------------------------
