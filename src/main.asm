@@ -19,8 +19,8 @@ SECTION "Vec VBlank", ROM0[$0040]
     ds $08 - 3, $FF
 
 SECTION "Vec STAT", ROM0[$0048]
-    reti
-    ds $08 - 1, $FF
+    jp StatISR
+    ds $08 - 3, $FF
 
 SECTION "Vec Timer", ROM0[$0050]
     reti
@@ -223,6 +223,7 @@ INCLUDE "practice.asm"
 INCLUDE "results.asm"
 INCLUDE "records.asm"
 INCLUDE "link.asm"
+INCLUDE "coop.asm"
 
 ; ---- Gráficos: todos los tiles juntos (build/chr/tiles.2bpp, ver `gbband build-gfx`) -----------------
 ; En el banco 1 (los bancos 1 a 15 están libres: las canciones empiezan en el 16): solo se copian a la VRAM al arrancar.

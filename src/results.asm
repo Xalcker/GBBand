@@ -37,6 +37,13 @@ EnterResults:
     xor a
     ld [wPlaying], a
     call AudioStop
+    call ComputeResults     ; (los aciertos y el total propios: en Co-Op se mandan al compañero mientras se espera)
+    call CoopResultsWait    ; Co-Op: "ESPERANDO A J2..." hasta que lleguen sus datos finales (carry = 1)
+    ret c
+; (ResultsFrame vuelve aquí cuando llegan)
+ResultsShow:
+    xor a
+    ld [wCoopWaiting], a
     call ComputeResults
     call CheckNewRecord
     call BeginTextScreen
@@ -122,6 +129,9 @@ EnterResults:
     ld a, [wVsGame]
     and a
     call nz, ResultsVsDraw  ; VS: el puntaje del otro y quién ganó (link.asm)
+    ld a, [wCoopGame]
+    and a
+    call nz, ResultsCoopDraw ; Co-Op: los aciertos del compañero y si la banda perdió (coop.asm)
     ld de, _SCRN0 + 32 * 17 + 2
     ld hl, TxtContinue
     call PrintStr
@@ -155,6 +165,7 @@ ComputeResults:
     ld a, h
     ld [wNotesTotal + 1], a
     call TotalToDigits
+    call CoopAddPeerNotes   ; Co-Op: las estrellas de la banda salen de las notas de los dos
     ; puntaje máximo posible con n notas (en unidades de 50)
     ld hl, wNotesTotal
     ld a, [hl+]

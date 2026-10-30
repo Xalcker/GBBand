@@ -40,6 +40,8 @@ DEF GOTB_START EQU 2
 DEF GOTB_SET   EQU 3
 DEF GOTB_GO    EQU 4
 DEF GOTB_SCORE EQU 5
+DEF GOTB_EVENTS EQU 6           ; Co-Op (coop.asm)
+DEF GOTB_BAND  EQU 7
 
 DEF RIVALB_FAILED   EQU 0       ; banderas de MSG_SCORE: se le acabó la vida
 DEF RIVALB_MUTED    EQU 1       ; su instrumento está callado (falló)
@@ -61,6 +63,7 @@ DEF LINK_SET0_FRESH EQU 4       ; un MSG_SET 0 de hace a lo más estos cuadros d
                                 ; cuenta, el 2 lo repite cada ~3 cuadros; con cuenta, deja de mandarlo)
 
 DEF LINK_ROW_STATUS EQU 8
+DEF LINK_SEND_LY    EQU 64      ; línea de la pantalla en que el maestro manda su byte (ver StatISR)
 
 SECTION "Link", ROM0
 
@@ -102,6 +105,24 @@ SerialArm::                     ; (A = byte armado)
     ldh [rSC], a
     ret
 
+; ISR de STAT (LYC = LINK_SEND_LY), solo en el maestro: un byte por cuadro, siempre en el mismo punto del cuadro. Si lo
+; mandara el bucle principal, un cuadro que se atrasa juntaría dos envíos sin que el esclavo alcanzara a volver a armarse.
+; Va a media pantalla porque el byte tarda ~9 líneas (1 ms) en cruzar: así termina dentro del mismo cuadro, también en
+; el puente de las pruebas, que avanza las consolas de cuadro en cuadro. No toca VRAM ni cambia de banco.
+StatISR:
+    push af
+    push hl
+    ldh a, [hLinkMaster]
+    and a
+    call nz, LinkIsrSend
+    pop hl
+    pop af
+    reti
+
+LinkIsrSend:
+    ldh a, [rSC]
+    bit 7, a                    ; la anterior todavía no termina
+    ret nz
 ; Maestro: manda el siguiente byte con el reloj interno. Usa A y HL.
 LinkSendNext:
     call LinkNextOut
@@ -185,7 +206,7 @@ LinkOutEmpty:
 ; Deja el cable apagado: sin interrupción serie, sin transferencia y sin papel.
 LinkStop:
     ldh a, [rIE]
-    and ~IEF_SERIAL
+    and ~(IEF_SERIAL | IEF_STAT)
     ldh [rIE], a
     xor a
     ldh [hLinkOn], a
@@ -222,6 +243,9 @@ LinkListen:
     call LinkDisarm
     xor a
     ldh [hLinkMaster], a
+    ldh a, [rIE]                ; (el esclavo no manda: sin la interrupción de STAT)
+    and ~IEF_STAT
+    ldh [rIE], a
     call LinkArm
     ei
     ldh a, [rDIV]
@@ -233,12 +257,22 @@ LinkListen:
     ld [wLinkTimer], a
     ret
 
-; Maestro: da el reloj (LinkPoll manda un byte por cuadro)
+; Maestro: da el reloj (StatISR manda un byte por cuadro)
 LinkCall:
     di
     call LinkDisarm
     ld a, 1
     ldh [hLinkMaster], a
+    ld a, LINK_SEND_LY
+    ldh [rLYC], a
+    ld a, STATF_LYC
+    ldh [rSTAT], a
+    ldh a, [rIF]
+    and ~IEF_STAT
+    ldh [rIF], a
+    ldh a, [rIE]
+    or IEF_STAT
+    ldh [rIE], a
     ei
     ld a, LINK_CALL
     ld [wLinkTimer], a
@@ -248,6 +282,7 @@ LinkCall:
 ; Bucle principal, antes del manejador del estado, mientras el cable está encendido
 LinkTick:
     call LinkPoll
+    call CoopTick               ; (antes que el puntaje: en resultados, los eventos que quedaban salen primero)
     call LinkScoreTick
     ld a, [wLinkState]
     cp LINK_OK
@@ -323,6 +358,13 @@ LinkScoreTick:
     ld hl, wHudDirty
     set 3, [hl]
 .send:
+    ld a, [wCoopGame]           ; Co-Op: jugando van los eventos y la banda (coop.asm); en resultados, este mensaje
+    and a                       ; lleva los aciertos y el total de notas en vez del puntaje
+    jr z, .notCoop
+    ld a, [wState]
+    cp STATE_PLAY
+    ret z
+.notCoop:
     ld a, [wState]
     ld c, 0
     cp STATE_PLAY
@@ -345,10 +387,22 @@ LinkScoreTick:
     jr z, .notMuted
     set RIVALB_MUTED, c
 .notMuted:
+    ld de, wScoreDigits
+    ld a, [wCoopGame]
+    and a
+    jr z, .source
+    ld hl, wHitsDigits
+    ld de, wCoopTmp
+    ld b, 3
+    call .copy3
+    ld hl, wTotalDigits
+    ld b, 3
+    call .copy3
+    ld de, wCoopTmp
+.source:
     ld hl, wMenuMsg
     ld a, MSG_SCORE
     ld [hl+], a
-    ld de, wScoreDigits
     ld b, 3
 .pack:
     ld a, [de]                  ; decenas * 10 (con [hl] de apoyo) + unidades
@@ -369,6 +423,13 @@ LinkScoreTick:
     ld hl, wMenuMsg
     ld b, LINK_SCORE_LEN + 1
     jp LinkSend
+.copy3:
+    ld a, [hl+]
+    ld [de], a
+    inc de
+    dec b
+    jr nz, .copy3
+    ret
 
 ; Z = 1 si hay una partida de VS por cable
 LinkIsVs:
@@ -382,8 +443,11 @@ LinkIsVs:
     inc a
     ret
 
-; PlayFrame: carry = 1 si la partida de VS debe cortarse porque alguien perdió (con fallo activado)
+; PlayFrame: carry = 1 si la partida de 2 jugadores debe cortarse: en VS, porque alguien perdió (con fallo activado);
+; en Co-Op, porque cayeron los dos
 LinkVsCut:
+    call CoopCut
+    jr nz, .cut
     call LinkIsVs
     jr nz, .no
     ld a, [wRivalFlags]
@@ -392,6 +456,7 @@ LinkVsCut:
     ld a, [wFailed]
     or b
     jr z, .no
+.cut:
     ld a, 1
     ld [wVsCut], a
     scf
@@ -430,12 +495,6 @@ LinkMuteRival:
 ; El maestro manda el siguiente byte; luego se leen los que llegaron. Cada mensaje completo se copia a su variable y
 ; enciende su bit en wLinkGot.
 LinkPoll:
-    ldh a, [hLinkMaster]
-    and a
-    jr z, .read
-    ldh a, [rSC]
-    bit 7, a                    ; la anterior todavía no termina
-    call z, LinkSendNext
 .read:
     ldh a, [hLinkInW]
     ld b, a
@@ -541,7 +600,7 @@ LinkPoll:
 
 ; Bytes de datos de cada tipo de mensaje (sin la suma de comprobación), desde MSG_HELLO
 LinkLens:
-    db LINK_HELLO_LEN, LINK_MENU_LEN, 1, 1, 1, LINK_SCORE_LEN
+    db LINK_HELLO_LEN, LINK_MENU_LEN, 1, 1, 1, LINK_SCORE_LEN, LINK_EVENTS_LEN, LINK_BAND_LEN
 LinkLensEnd:
 ; A dónde se copian sus datos y qué bit encienden en wLinkGot
 LinkDest:
@@ -557,6 +616,10 @@ LinkDest:
     db 1 << GOTB_GO
     dw wRivalMsg
     db 1 << GOTB_SCORE
+    dw wPeerEvents
+    db 1 << GOTB_EVENTS
+    dw wPeerBand
+    db 1 << GOTB_BAND
 
 HelloMsg:
     db MSG_HELLO, LINK_VERSION, SONG_LIST_HASH & $7F, (SONG_LIST_HASH >> 7) & $7F
@@ -758,6 +821,7 @@ MenuLinkEnter:
     ld a, LINK_REFRESH
     ld [wMenuRefresh], a
     ld a, $FF
+    ld [wPeerDiffSeen], a
     ld [wMenuSent], a           ; el primer cuadro manda el estado completo
     ldh a, [hLinkMaster]
     and a
@@ -956,6 +1020,15 @@ MenuBuildState:
 ; Jugador 2: sigue la canción del 1 y, en VS, su dificultad; cuando el 1 cambia de instrumento en VS, lo copia (y luego
 ; puede cambiarlo). Si cambia la canción o la dificultad, deja de estar "listo".
 MenuApplyPeer:
+    call LinkIsCoop             ; Co-Op: el récord de banda depende de la dificultad más alta de los dos
+    jr nz, .notCoop
+    ld a, [wPeerMenu + 2]
+    ld hl, wPeerDiffSeen
+    cp [hl]
+    jr z, .notCoop
+    ld [hl], a
+    call RefreshRecord
+.notCoop:
     ldh a, [hLinkMaster]
     and a
     ret nz

@@ -421,3 +421,107 @@ def test_vs_marcador_muestra_al_otro_y_calla_su_canal(rom):
         for r in (a, b):
             r.tick(1)
         m.screenshot(ROOT / "build" / "test-link" / "vs-marcador-j1.png")
+
+
+# ---- Co-Op --------------------------------------------------------------------------------------------------------
+
+def coop_menu(rom: Path, song: str, slave_no_fail: bool = False, master_no_fail: bool = False):
+    """Conecta en Co-Op, el 1 elige la canción y el 2 cambia a otro instrumento (y, si se pide, a "sin fallo")."""
+    a, b, bridge, m, s = connect_to_menu(rom, 2)
+    choose_song(bridge, m, s, song)
+    tap(bridge, "down", s)
+    tap(bridge, "right", s)
+    assert value(s, "wInstrument") != value(m, "wInstrument")
+    for r, no_fail in ((s, slave_no_fail), (m, master_no_fail)):
+        if no_fail:
+            for _ in range(3):
+                tap(bridge, "down", r)
+            tap(bridge, "right", r)
+            assert value(r, "wNoFail") == 1
+    bridge.tick(20)
+    return a, b, bridge, m, s
+
+
+def start_coop(bridge: LinkBridge, m: Runner, s: Runner, bot_m: str, bot_s: str) -> None:
+    tap(bridge, "start", s)
+    tap(bridge, "start", m)
+    assert wait_until(bridge, lambda: all(value(r, "wPlaying") for r in (m, s)), 120), "la canción no empezó"
+    assert value(m, "wCoopGame") == value(s, "wCoopGame") == 1
+    attach_bot(m, bot_m)
+    attach_bot(s, bot_s)
+
+
+def wait_results(bridge: LinkBridge, m: Runner, s: Runner, frames: int = 20000) -> None:
+    shown = lambda: all(value(r, "wState") == STATE_RESULTS and not value(r, "wCoopWaiting") for r in (m, s))
+    assert wait_until(bridge, shown, frames), "no llegaron los dos a los resultados de la banda: " + str(
+        [(value(r, "wState"), value(r, "wCoopWaiting"), value(r, "wRivalFlags"), value(r, "wBandFinal")) for r in (m, s)])
+    bridge.tick(10)
+
+
+def test_coop_completo_un_marcador_de_banda(rom):
+    a, b, bridge, m, s = coop_menu(rom, "demo")
+    with a, b:
+        start_coop(bridge, m, s, "perfecto", "perfecto")
+        bridge.tick(600)
+        # a media canción: el 2 ve el marcador de la banda (llega unas veces por segundo) y no suma por su cuenta
+        assert abs(digits(m, "wScoreDigits") - digits(s, "wScoreDigits")) <= 2000
+        wait_results(bridge, m, s)
+        band = digits(m, "wScoreDigits")
+        assert band == digits(s, "wScoreDigits") > 0, "los dos deben terminar con el mismo puntaje de banda"
+        assert digits(m, "wMaxComboDigits", 3) == digits(s, "wMaxComboDigits", 3)
+        hits_m, hits_s = digits(m, "wHitsDigits", 3), digits(s, "wHitsDigits", 3)
+        assert digits(m, "wMaxComboDigits", 3) == hits_m + hits_s, "sin fallos, el combo de la banda junta los de los dos"
+        assert value(m, "wStars") == value(s, "wStars") == 5
+        # el renglón del compañero: sus aciertos y su total
+        assert digits(m, "wRivalDigits", 3) == hits_s and digits(s, "wRivalDigits", 3) == hits_m
+        assert value(m, "wNewRecord") == value(s, "wNewRecord") == 1, "los dos en pie: récord de banda"
+        assert value(m, "wRecKey") >= 16 and value(s, "wRecKey") == value(m, "wRecKey")
+        for r in (a, b):
+            r.tick(1)
+        m.screenshot(ROOT / "build" / "test-link" / "coop-resultados-j1.png")
+        s.screenshot(ROOT / "build" / "test-link" / "coop-resultados-j2.png")
+
+
+def test_coop_un_fallo_rompe_el_combo_de_los_dos(rom):
+    a, b, bridge, m, s = coop_menu(rom, "carrera", slave_no_fail=True)
+    with a, b:
+        start_coop(bridge, m, s, "perfecto", "sin-tocar")
+        bridge.tick(1500)
+        hits_m = digits(m, "wHitsDigits", 3)
+        assert hits_m > 60
+        assert digits(m, "wMaxComboDigits", 3) < hits_m // 2, "los fallos del 2 debían romper el combo de la banda"
+
+
+def test_coop_uno_cae_el_otro_sigue_y_lo_revive(rom):
+    a, b, bridge, m, s = coop_menu(rom, "carrera")
+    with a, b:
+        start_coop(bridge, m, s, "perfecto", "sin-tocar")
+        assert wait_until(bridge, lambda: value(s, "wFailed") == 1, 3000), "el 2 debía caer"
+        assert wait_until(bridge, lambda: value(m, "wRivalFlags") & 1, 60), "el 1 debía saber que el 2 cayó"
+        assert value(m, "wState") == STATE_PLAY and value(m, "wFailed") == 0, "la banda sigue con el 1"
+        assert wait_until(bridge, lambda: value(m, "wStarEnergy") >= 32, 6000), "el 1 debía juntar media barra"
+        energy = value(m, "wStarEnergy")
+        tap(bridge, "select", m)
+        assert value(m, "wStarEnergy") <= energy - 32 + 1, "revivir gasta media barra"
+        assert value(m, "wStarActive") == 0, "con el compañero caído, Select revive en vez de activar el poder"
+        assert wait_until(bridge, lambda: value(s, "wFailed") == 0, 60), "el 2 debía volver"
+        assert value(s, "wMuted") == 0 or value(s, "wLife") > 0
+        for r in (a, b):
+            r.tick(1)
+        s.screenshot(ROOT / "build" / "test-link" / "coop-revivido-j2.png")
+
+
+def test_coop_si_caen_los_dos_pierde_la_banda(rom):
+    a, b, bridge, m, s = coop_menu(rom, "carrera")
+    with a, b:
+        start_coop(bridge, m, s, "sin-tocar", "sin-tocar")
+        wait_results(bridge, m, s, 4000)
+        assert value(m, "wVsCut") == value(s, "wVsCut") == 1
+        end = int.from_bytes(m.read("wEndFrame", 2), "little")
+        assert int.from_bytes(m.read("wT", 2), "little") < end - 600, "la partida debió cortarse antes del final"
+        clean = lambda r: vs_line(r).replace("\x00", " ").strip()     # (lo que no se escribió es el tile vacío $00)
+        assert clean(m) == clean(s) == "LA BANDA PERDIO"
+        assert value(m, "wNewRecord") == value(s, "wNewRecord") == 0
+        for r in (a, b):
+            r.tick(1)
+        m.screenshot(ROOT / "build" / "test-link" / "coop-perdio-j1.png")
