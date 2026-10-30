@@ -3,7 +3,7 @@
 Un juego de ritmo estilo Guitar Hero / Rock Band para **Game Boy Color**, compatible con la Game Boy original
 (DMG). Es el equivalente de [NESBand](https://github.com/Xalcker/NESBand).
 
-**Estado actual (fase 4 de 5, terminada; la 5 trae los 2 jugadores por cable link):** el juego ya tiene **diez canciones** (las originales de NESBand, portadas), cada una con
+**Estado actual (fase 5 en curso: los 2 jugadores por cable link ya están, VS y Co-Op):** el juego ya tiene **diez canciones** (las originales de NESBand, portadas), cada una con
 charts de **guitarra, teclado, bajo y batería** en 4 dificultades. Un menú elige canción, instrumento y dificultad.
 Las notas caen por una autopista de 5 carriles, se aciertan con ←, ↓, →, B y A (ventana de ±6 cuadros), suman puntaje y
 combo, y el canal del instrumento se calla si fallas. La música es un stream de registros del chip de sonido, un
@@ -106,6 +106,23 @@ chart cae en el mismo cuadro que el alta de nota del canal de su instrumento, 0 
 audio, del formato del stream, de los charts, del importador de NSF (con NSF sintéticos), del editor y de su reproductor
 (con Node). Dejan `resultado.txt` y capturas en `build/test-<canción>-<bot>-<instrumento>-<dificultad>-<modo>/`.
 Para ver el juego en Mesen: `tools\mesen\Mesen.exe build\gbband.gb`.
+
+### Probar 2 jugadores a mano
+
+Mesen no emula el cable link, así que para probar VS y Co-Op hace falta un emulador que conecte dos consolas. Usa dos
+copias del ROM (`gbband-j1.gb` y `gbband-j2.gb`) para que cada una tenga su propio `.sav` y sus récords no se pisen.
+
+- **Windows, BGB** ([bgb.bircd.org](https://bgb.bircd.org)): abre dos BGB, cada uno con su copia. En el primero, clic
+  derecho → *Link* → *Listen* (acepta el puerto); en el segundo, *Link* → *Connect* a `127.0.0.1` con el mismo puerto.
+- **macOS, SameBoy** ([sameboy.github.io](https://sameboy.github.io), o `brew install --cask sameboy`): abre las dos
+  copias en dos ventanas y, desde el menú de una de ellas, conecta el cable con la otra ventana.
+- **RetroArch con el núcleo SameBoy** (cualquier sistema): en modo de dos cartuchos el núcleo muestra las dos consolas
+  conectadas en una sola ventana.
+
+Qué revisar: en el título elige `2 JUG. VS` (o `COOP`) en las dos y presiona Start; las dos deben pasar a `CONECTADO` y luego
+al menú (la que queda como J1 elige la canción). Con las dos `LISTO`, la canción tiene que empezar a la vez. En VS el renglón
+de abajo muestra el puntaje del otro; en Co-Op, fallar en una rompe el combo en las dos. Cerrar una ventana a media canción
+deja a la otra tocando sola; en el menú, la regresa al título.
 
 ## Importar canciones
 

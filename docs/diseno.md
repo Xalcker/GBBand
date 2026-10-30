@@ -196,7 +196,8 @@ no se desempatan nunca, porque hacen exactamente lo mismo; dos consolas reales n
 2. ~~Del saludo al menú, elección de canción por el jugador 1 y arranque sincronizado.~~ Hecho.
 3. ~~VS completo (puntaje del rival, resultados, corte al perder).~~ Hecho.
 4. ~~Co-Op completo (marcador de banda, revivir, récord de banda).~~ Hecho.
-5. Documentación y prueba a mano en emulador con dos ventanas.
+5. ~~Documentación y guía para la prueba a mano (README, "Probar 2 jugadores a mano").~~ Hecho. Falta correrla en
+   SameBoy o BGB y en dos consolas de verdad.
 
 ## Estado actual
 
@@ -207,4 +208,5 @@ no se desempatan nunca, porque hacen exactamente lo mismo; dos consolas reales n
 - **Fase 4** (el juego completo): título con música, menú, opciones (espejo, velocidad, caída, práctica con marcas, efecto al
   fallar), pausa, resultados con estrellas, récords en SRAM, vida y "sin fallo", notas sostenidas, poder estelar, medidores,
   bombo como barra, escenario con torres, reflectores y público al ritmo, color CGB. Hecha; ver decisiones.md (fase 4).
-  Lo que sigue en la fase 5: importador GBS/VGM, link cable (2 jugadores) y el pulido de la release.
+  Lo que sigue en la fase 5: importador GBS/VGM y el pulido de la release (el link cable para 2 jugadores ya está; falta
+  probarlo en consolas de verdad).
