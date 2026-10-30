@@ -50,7 +50,7 @@ valor, **Select** abre las opciones y Start empieza. Carriles: verde ←, rojo �
 carriles, medio 4 y difícil y experto 5. En la batería el bombo es una barra naranja que cruza todos los carriles (botón A).
 
 - **Partida:** puntaje (50 por nota × multiplicador, hasta ×4), combo, vida (si se acaba, tu instrumento se calla y pierdes),
-  sostener las notas con cola da puntos extra. Al rasguear en falso (un botón sin nota) tiembla la autopista, se tiñe de rojo y suena un efecto; una nota que dejas pasar solo calla tu instrumento.
+  sostener las notas con cola da puntos extra. Al acertar sale una llamarada sobre el aro del carril (azul con el poder estelar). Al rasguear en falso (un botón sin nota) tiembla la autopista, se tiñe de rojo y suena un efecto; una nota que dejas pasar solo calla tu instrumento.
 - **Poder estelar:** las notas marcadas en frases de 4; si aciertas las 4 la barra de la izquierda sube. Con la mitad o más,
   **Select** lo activa y el multiplicador vale el doble hasta que se vacíe. Las estrellas salen del puntaje normal.
 - **Pausa (Start):** Start sigue, Select sale al menú. En la práctica, A y B ponen las marcas del bucle (ver abajo).

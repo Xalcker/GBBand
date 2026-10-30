@@ -38,6 +38,8 @@ HOLD_FRAMES = 3
 STATE_PLAY = 2
 STATE_PAUSE = 3
 STATE_END = 4  # la pantalla de resultados
+FLAME_TIME = 12        # cuadros que dura la llamarada al acertar (constants.inc)
+FLAME_ATTR_STAR = 0x06  # atributos de su sprite con el poder estelar (fuego azul)
 INSTRUMENTS = ("guitarra", "teclado", "bajo", "bateria")  # canal del APU de cada uno: CH1, CH2, CH3, CH4
 LANE_MASK = 0x1F
 
@@ -458,7 +460,8 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
         releases: dict[int, int] = {}  # carril -> cuadro en que se suelta
         held: set[int] = set()
         state = {"prev_on": note_on_counts(r), "timeline": {}, "paused": False, "star_cool": 0, "max_energy": 0, "activations": 0, "was_active": 0, "last_t": -1,
-                 "sfx_starts": 0, "sfx_prev": 0, "sfx_ids": set(), "max_scx": 0, "shake_frames": 0, "sfx_times": []}
+                 "sfx_starts": 0, "sfx_prev": 0, "sfx_ids": set(), "max_scx": 0, "shake_frames": 0, "sfx_times": [],
+                 "flames": 0, "flames_star": 0}
         hframe = lambda: int.from_bytes(r.read("hFrame", 2), "little")
 
         def on_isr_end(_ctx) -> None:
@@ -495,6 +498,12 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
             scx = r.read("hScx")[0]
             state["max_scx"] = max(state["max_scx"], scx if scx < 128 else 256 - scx)
             state["shake_frames"] += 1 if r.read("wShake")[0] else 0
+            # llamaradas que se encendieron en este cuadro (FlameStart pone FLAME_TIME y FlameTick ya restó uno)
+            flame_attr = r.read("wFlameAttr", 5)
+            for lane, left in enumerate(r.read("wFlame", 5)):
+                if left == FLAME_TIME - 1:
+                    state["flames"] += 1
+                    state["flames_star"] += 1 if flame_attr[lane] == FLAME_ATTR_STAR else 0
             cur = note_on_counts(r)
             for ch in range(4):
                 if cur[ch] != state["prev_on"][ch]:
@@ -548,6 +557,7 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
         v["sfx_starts"], v["sfx_ids"], v["max_scx"], v["shake_frames"] = state["sfx_starts"], state["sfx_ids"], state["max_scx"], state["shake_frames"]
         v["sfx_times"] = state["sfx_times"]
         v["max_energy"], v["star_activations"] = state["max_energy"], state["activations"]
+        v["flames"], v["flames_star"] = state["flames"], state["flames_star"]
         if initials:
             enter_initials(r, initials)
             v["rec_text"] = bytes(r.read("wRecText", 20)).decode("ascii")

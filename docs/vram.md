@@ -17,7 +17,8 @@ o de `uv run gbband measure-placement`. Lo medido en PyBoy 2.8.1 se cruzó con M
 | `$60`-`$A5` | gemas: 5 carriles x 14 tiles (`gems.tiles`, generado por `gbband build-gems`) |
 | `$A6`-`$B2` | el bombo de la batería: barra de 10 tiles de ancho, llena y con 3 desplazamientos arriba/abajo, izquierda/derecha |
 | `$B3` | reflector apagado (no se dibuja: se copia sobre `$1B` en cada tiempo) |
-| `$B4`-`$FF` | libres (76 tiles) |
+| `$B4`-`$B9` | llamarada al acertar (sprite 8x16, 3 cuadros de animación) |
+| `$BA`-`$BF`, `$D0`-`$FF` | libres (54 tiles; `$C0`-`$CF` es el logo del título) |
 
 Total usado con la colocación **B**: 143 tiles (los de las gemas: 70). Con la **A** bastarían 83 (gemas: 10), y los
 tiles `$62`-`$A5` salvo los de desplazamiento 0 quedarían libres. En DMG quedan además los 128 tiles del modo `$8800`
@@ -29,7 +30,8 @@ ocupa los 10 tiles de la autopista, "000000  X1" y "COMBO  000", y a los lados v
 Los aciertos y fallos solo salen en el resumen del final de la canción.
 CGB: atributos del mapa en el banco 1; paleta 0 = texto, paletas 1 a 5 = los 5 carriles (verde, rojo, amarillo, azul,
 naranja), 6 = torres y público (acero), 7 = reflectores (la ISR cambia su color con cada tiempo). Sprites: 0 a 4 aros y medidor
-de vida, 3 estrella, 7 estrella activa. En DMG los carriles se distinguen por forma: ◀ ▼ ▶ anillo rombo, y los reflectores
+de vida, 3 estrella, 5 llamarada, 6 llamarada con el poder estelar (azul), 7 estrella activa. En DMG la llamarada usa `OBP1`
+(tonos al revés: centro claro y orilla oscura) y con el poder estelar `OBP0` (centro oscuro). En DMG los carriles se distinguen por forma: ◀ ▼ ▶ anillo rombo, y los reflectores
 parpadean entre claro y oscuro con cada tiempo. El efecto al fallar pone `BGP` invertida (DMG) o la paleta 0 en rojo (CGB) 6 cuadros.
 
 ## Colocación A contra B

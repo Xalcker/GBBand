@@ -149,6 +149,9 @@ wNSust::        ds 1     ; la nota que se leyó tiene cola
 wTailOpen::     ds 1     ; carriles con una cola abierta en la fila que se arma
 wPressLanes::   ds 1
 wTryBit::       ds 1
+wTryLane::      ds 1     ; carril que se está probando (para la llamarada)
+wFlame::        ds NUM_LANES ; cuadros que le quedan a la llamarada de cada carril (0 = sin llamarada)
+wFlameAttr::    ds NUM_LANES ; atributos de su sprite (fuego normal o azul del poder estelar)
 wScanI::        ds 1
 wScanE::        ds 1
 wHeldPrev::     ds 1
