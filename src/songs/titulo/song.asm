@@ -33,15 +33,15 @@ Song_titulo::
     dw Song_titulo_keyframe0
     dw 192
     db SONG_BANK + 1 + 0
-    dw $4262
+    dw $42A9
     dw Song_titulo_keyframe1
     dw 384
     db SONG_BANK + 1 + 0
-    dw $44C0
+    dw $451F
     dw Song_titulo_keyframe2
     dw 576
     db SONG_BANK + 1 + 0
-    dw $46FD
+    dw $47A3
     dw Song_titulo_keyframe3
 
 Song_titulo_bajo_dificil:

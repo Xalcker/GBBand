@@ -136,7 +136,8 @@ Decisiones menores que tomé yo, con su motivo. Las de gran tamaño se proponen 
 20. **Escenario.** Torres con celosía y reflectores en las columnas laterales, público en los costados de la Window y marcador a
     lo ancho de la autopista (como NESBand 0.3.2). Con cada tiempo: el público cambia de pose, los reflectores se encienden o se
     apagan (se copia un tile) y en CGB cambian de color (paleta 7). Cada cosa va en un cuadro para no pasar la cuota de VRAM.
-21. **Música del título.** `audio/titulo.py` → `audio/titulo.txt` → `gbband import-song ... --name titulo`; vive en su propio slot
+21. **Música del título.** La misma de NESBand (y GENBand): `audio/titulo.txt` se copia tal cual del repositorio de NESBand (como
+    `demo.txt`, no tiene `.py`) → `gbband import-song ... --name titulo`; vive en su propio slot
     (banco 112, fuera de la lista del menú; `list-songs` escribe `build/list_defs.inc` con `HAS_TITLE_MUSIC` y `TITLE_BANK`).
     Sin lead-in y en bucle. Los efectos del menú (mover, aceptar, volver) usan el mismo mecanismo que los del fallo, en CH1; el APU
     se queda encendido (`ApuOn`) en los menús para que suenen.
