@@ -7,9 +7,9 @@
 
 ## Que se note el acierto
 
-Hoy la gema acertada sigue bajando por la autopista. La **llamarada al acertar** ya está (sprites 15 a 19 sobre los aros,
-3 cuadros de animación en 12 cuadros, azul con el poder estelar; ver `FlameStart` en `hud.asm`). Falta:
+Ya están la **llamarada al acertar** (sprites 15 a 19 sobre los aros, azul con el poder estelar; `FlameStart` en
+`hud.asm`) y el **borrado de la gema acertada** (`GemEraseStart` en `highway.asm`). Falta:
 
-- **Borrar la gema acertada:** encolar 2 tiles en blanco (o los de la línea del carril) en su fila del mapa, y en la de
-  abajo si la gema cae entre dos filas (colocación B). Son 2 a 4 bytes en la cola de VRAM por carril; hay que medir el
-  peor cuadro (acorde de 3 notas con la fila nueva y el audio de 4 canales) con `wOverrun`.
+- **Borrar también en la batería:** el bombo es una barra que cruza la fila y las gemas van encima; para borrar una gema
+  habría que reescribir la fila entera con lo que quede sin tocar (la barra y las otras gemas), unos 20 bytes más por
+  borrado.

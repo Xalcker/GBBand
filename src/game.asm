@@ -812,6 +812,7 @@ PlayFrame:
     call MeterUpdate
     call FxFrame
     call StageBeat
+    call GemEraseFrame      ; al final: solo si la cola de VRAM del cuadro tiene lugar
     ld a, [wMuted]
     and a
     ld a, $FF

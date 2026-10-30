@@ -66,7 +66,7 @@ def test_perfecto(rom_b, song, instrument, difficulty, mode):
     audio dispara la nota del canal de su instrumento (prueba de sincronía)."""
     visual = song == QUICK_SONGS[0] and instrument == "guitarra" and difficulty in ("facil", "experto") and mode == "dmg"
     r = playtest.run_case(rom_b, mode, song, instrument, difficulty, "perfecto",
-                          out_dir(song, "perfecto", instrument, difficulty, mode), visual=visual)
+                          out_dir(song, "perfecto", instrument, difficulty, mode), visual=visual, check_erase=True)
     v = r.values
     common_checks(r)
     assert v["hits"] == r.total_notes and v["misses"] == 0 and v["air"] == 0
@@ -74,6 +74,11 @@ def test_perfecto(rom_b, song, instrument, difficulty, mode):
     assert v["score"] == playtest.expected_score(r.total_notes)
     assert v["pct"] == 100 and v["stars"] == 5 and v["notes_total"] == r.total_notes and not v["failed"]
     assert v["flames"] == r.total_notes, "cada nota acertada enciende la llamarada de su carril"
+    assert v["erase_checked"] > 0
+    if instrument == "bateria":   # el bombo cruza la fila: en la batería las gemas no se borran
+        assert v["erase_drawn"] == v["erase_checked"]
+    else:
+        assert v["erase_drawn"] == 0, f"{v['erase_drawn']} de {v['erase_checked']} gemas acertadas siguen en el fondo"
     data = playtest.load_song(song)
     assert playtest.sync_errors(r, data.chart(instrument, difficulty)) == []
     for ch in range(4):
@@ -90,11 +95,12 @@ def test_sin_tocar(rom_b, mode, instrument, channel_mask):
     """No toca nada: todo se pierde y el canal del instrumento queda callado (y solo ese)."""
     song = QUICK_SONGS[0]
     r = playtest.run_case(rom_b, mode, song, instrument, "experto", "sin-tocar",
-                          out_dir(song, "sin-tocar", instrument, "experto", mode))
+                          out_dir(song, "sin-tocar", instrument, "experto", mode), check_erase=True)
     v = r.values
     common_checks(r)
     assert v["hits"] == 0 and v["score"] == 0 and v["max_combo"] == 0
     assert v["misses"] == r.total_notes and v["flames"] == 0
+    assert v["erase_checked"] > 0 and v["erase_drawn"] == v["erase_checked"], "una gema que no se tocó sigue en el fondo"
     assert r.muted_late and r.nr51_late == 0xFF & ~channel_mask, f"NR51={r.nr51_late:#04x}"
 
 

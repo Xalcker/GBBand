@@ -513,6 +513,7 @@ TryHit:
     ld [hl], a
 .noHold:
     call FlameStart
+    call GemEraseStart
     call StarNoteHit
     jp HitNote
 .nextI:
