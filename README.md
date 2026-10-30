@@ -61,7 +61,7 @@ carriles, medio 4 y difícil y experto 5. En la batería el bombo es una barra n
   práctica (principio, 1/4, 1/2, 3/4) y EFECTO AL FALLAR (SI, SOLO SONIDO o NO). Con una opción distinta de la normal (salvo el
   efecto) no hay récords. En la pausa de la práctica, **A** hace que el bucle empiece 2 s antes de donde pausaste y **B** que
   termine donde pausaste (el bucle debe durar al menos 4 s); las marcas valen hasta volver al menú.
-- **2 jugadores (en desarrollo; probado solo en emulador):** cada quien con su Game Boy, su cartucho (con las mismas
+- **2 jugadores (probado solo en emulador: PyBoy y SameBoy con dos ventanas):** cada quien con su Game Boy, su cartucho (con las mismas
   canciones) y un cable link. En el título, ←/→ cambia JUGADORES a `2 JUG. VS` o `2 JUG. COOP` y Start busca al otro.
   El que queda como jugador 1 elige la canción (y en VS la dificultad); cada quien elige su instrumento, y en Co-Op no
   pueden ser el mismo. Abajo se ve qué eligió el otro. Start dice "listo" y, con los dos listos, la canción empieza a la
