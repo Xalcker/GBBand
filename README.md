@@ -12,6 +12,20 @@ registro por cuadro, que se genera en la PC. Corre en Game Boy original (DMG) y 
 título con logo y música, opciones, práctica, pausa, resultados con estrellas y récords en la batería del cartucho (ver la
 hoja de ruta en [docs/diseno.md](docs/diseno.md) y lo pendiente en [docs/ideas.md](docs/ideas.md)).
 
+<p align="center">
+  <img src="docs/img/titulo.png" width="240" alt="Pantalla de título">
+  <img src="docs/img/menu.png" width="240" alt="Menú: canción, instrumento y dificultad">
+  <img src="docs/img/guitarra.png" width="240" alt="Guitarra con notas sostenidas y poder estelar">
+</p>
+<p align="center">
+  <img src="docs/img/bateria.png" width="240" alt="Batería: el bombo es la barra naranja">
+  <img src="docs/img/dmg.png" width="240" alt="La misma ROM en una Game Boy original (DMG)">
+  <img src="docs/img/resultados.png" width="240" alt="Resultados con estrellas y récord">
+</p>
+
+Título, menú, guitarra (notas sostenidas y poder estelar), batería (el bombo es la barra), Game Boy original y resultados.
+Capturas de la ROM v0.0.1 en el emulador PyBoy.
+
 ## Sobre este proyecto
 
 Todo el código de GBBand lo escribe una IA (Claude). Yo solo pongo las ideas y no sé SM83 ni Game Boy.
