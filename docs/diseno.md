@@ -115,25 +115,39 @@ compartir el marcador. No hace falta dividir la pantalla ni encoger los carriles
 
 **Conexión (hecha).** En el título, el renglón JUGADORES (`1 JUGADOR`, `2 JUG. VS`, `2 JUG. COOP`, con ←/→; el menú ya no
 tiene lugar para otro renglón). Con 2, Start abre la pantalla de conexión (`link.asm`), que busca al otro hasta que B la
-cancela. Cada byte del cable es parte de un mensaje: el tipo lleva el bit 7 en 1 y los datos (7 bits) en 0; `$00` es "nada
-que mandar" y `$FF` lo que se lee sin nadie del otro lado, y los dos se ignoran entre mensajes. Para repartir papeles,
+cancela. Cada byte del cable es parte de un mensaje: el tipo lleva el bit 7 en 1, los datos (7 bits) en 0 y al final va
+una suma de comprobación de 7 bits (tipo + datos). `$80` es "nada que mandar" y `$FF` lo que se lee sin nadie del otro
+lado: como llevan el bit 7, cortan el mensaje que se estuviera recibiendo. Así, si se pierde un byte, el mensaje se tira
+(y si se pierden bytes de dos mensajes seguidos y se "pegan", la suma no coincide). Para repartir papeles,
 cada consola espera como esclavo (reloj externo) un rato al azar y, si nadie la llamó, llama como maestro (reloj interno);
 mientras busca repite su saludo (`MSG_HELLO`: versión del protocolo y hash de 14 bits de la lista de canciones, que
 `list-songs` deja en `SONG_LIST_HASH`). Quien recibe el saludo completo del otro queda conectado con el papel que tenía:
-el maestro es el **jugador 1**. Si el saludo no coincide, sale `CANCIONES DISTINTAS`. El maestro manda un byte por cuadro
-desde el bucle principal y el esclavo arma el siguiente en la ISR serie en cuanto llega uno.
+el maestro es el **jugador 1**. Si el saludo no coincide, sale `CANCIONES DISTINTAS`. Ya conectada, cada consola sigue
+repitiendo su saludo el segundo que dura "CONECTADO" (para que el otro también lo complete) y a veces deja un hueco al azar
+antes de repetirlo (para que una falla periódica del cable no corte siempre el mismo byte).
 
-**Menú.** El maestro elige canción (y en VS la dificultad, como en NESBand); cada quien elige su instrumento y dificultad en
-su propia consola. En Co-Op no pueden tocar el mismo instrumento; en VS el jugador 2 copia al 1 por defecto. Start en el
-maestro arranca cuando los dos están listos.
+**Un byte por cuadro (hecho).** `LinkTick` corre en cada cuadro desde el bucle principal, en cualquier estado: el maestro
+manda el siguiente byte (no en la ISR de VBlank, que ya va justa; ver `wOverrun`) y los mensajes que se completaron quedan
+en variables con su bit en `wLinkGot`. La ISR serie (vector `$0058`) solo guarda el byte que llegó y, en el esclavo, arma
+el siguiente. A 8 KHz un byte tarda ~1 ms. Si en 2 s no llega nada del otro, se da la conexión por perdida: en el menú se
+vuelve al título y, jugando, se sigue solo.
 
-**Arranque sincronizado.** El maestro manda `EMPIEZA` y las dos consolas empiezan la canción en el VBlank siguiente al fin
-de la transferencia. Los dos cristales difieren en unas ppm: en una canción de 4 minutos es menos de un cuadro. Cada cuadro
-viaja también el número de cuadro para detectar desfase (si pasa de 2 cuadros, el esclavo repite o salta uno).
+**Menú (hecho).** Cada consola manda su estado (`MSG_MENU`: canción, instrumento, dificultad, listo y sin fallo) cuando
+cambia y cada 8 cuadros, así que un mensaje perdido se repara solo. El jugador 1 elige la canción y, en VS, la dificultad
+(como en NESBand): el 2 las sigue y no las puede cambiar; en VS también copia el instrumento del 1 cuando este lo cambia
+(y luego puede cambiarlo). En Co-Op no pueden tocar el mismo instrumento (el 2 no puede decir "listo" con el del 1). La
+fila 16 dice qué eligió el otro (`J2 GUITARRA LISTO`) y la 17 si este jugador ya está `LISTO` (Start; B lo quita, y si no
+estaba listo, B deja el cable y vuelve al título). Con 2 jugadores no hay opciones ni pausa: la velocidad y la práctica
+desincronizarían las consolas (se ponen en normal al empezar), y pausar una dejaría a la otra tocando.
 
-**Un paquete por cuadro.** El maestro inicia el intercambio en el bucle principal (no en la ISR de VBlank, que ya va justa;
-ver `wOverrun`); la interrupción serie (vector `$0058`, hoy un `reti`) solo guarda el byte recibido y manda el siguiente.
-A 8 KHz cada byte tarda ~1 ms, así que 4 a 6 bytes por cuadro cuestan menos del 10 % del cuadro y casi nada de CPU.
+**Arranque sincronizado (hecho).** Cada consola tarda distinto en preparar la canción con el LCD apagado (la CGB limpia dos
+bancos de VRAM), así que con los dos listos cada una la prepara y espera en `STATE_LINKWAIT` con la autopista en pantalla.
+El jugador 1 repite `MSG_START` hasta que el 2 contesta `MSG_SET 0` (ya la preparó); entonces cuenta 30 cuadros y repite
+`MSG_GO` con los que faltan. El 2 toma la cuenta del último que le llegó y contesta `MSG_SET 1` mientras cuenta. Los dos
+echan a andar la canción al llegar a 0. A 12 cuadros del final, si lo último que el 1 oyó fue `MSG_SET 0` (al 2 no le ha
+llegado ninguna cuenta), la vuelve a empezar; el 2 nunca empieza sin cuenta, así que nadie arranca solo. En las pruebas
+empiezan en el mismo cuadro (o con uno de diferencia por el puente). Los dos cristales difieren en unas ppm: en una canción
+de 4 minutos es menos de un cuadro; si en consolas reales se nota, el paso 3 puede mandar `wT` para corregirlo.
 
 - **VS:** cada consola manda su puntaje (3 bytes BCD) y banderas (vida baja, perdió, poder estelar activo, instrumento
   callado). La pantalla muestra el puntaje del rival en la Window. Al final: `GANA J1 POR 001230`, `EMPATE` o, con fallo,
@@ -147,15 +161,20 @@ A 8 KHz cada byte tarda ~1 ms, así que 4 a 6 bytes por cuadro cuestan menos del
 
 **Pruebas.** El cable de PyBoy no sirve para esto (su modo de memoria compartida necesita dos hilos que se esperan en
 cada byte, y el puerto normal siempre lee `$FF`), así que `linkbridge.py` corre dos PyBoy a la par, un cuadro cada uno, y
-pasa los bytes con hooks en `SerialSend`, `SerialArm`, `SerialOff` y `SerialGot`. El esclavo recibe hasta un cuadro tarde;
-el protocolo no depende de eso. `tests/test_link.py` prueba la conexión con distintos tiempos de entrada, dos CGB que entran
-en el mismo cuadro, cartuchos con canciones distintas y una consola sola. Falta probarlo a mano en SameBoy o BGB con dos
-ventanas y con dos consolas de verdad (hasta entonces, **probado solo en emulador**).
+pasa los bytes con hooks en `SerialSend`, `SerialArm`, `SerialOff` y `SerialGot`. El esclavo recibe hasta un cuadro tarde,
+y si un cuadro del maestro se atrasa, el puente puede perder un byte (en una consola real casi no pasa). Además, el puente
+puede tirar a propósito una parte de los bytes al azar (`drop_rate`) para probar que el protocolo se recupera.
+`tests/test_link.py` prueba la conexión con distintos tiempos de entrada, dos CGB idénticas, cartuchos con canciones
+distintas, una consola sola, el menú de VS y de Co-Op en las combinaciones DMG/CGB, que uno se vaya y un cable que pierde
+el 10 y el 20 % de los bytes. A mano, con 20 semillas: con 5, 10 y 20 % de pérdida siempre se conectan y empiezan en el
+mismo cuadro; con 30 % (uno de cada tres bytes) a veces no. Falta probarlo en SameBoy o BGB con dos ventanas y con dos
+consolas de verdad (hasta entonces, **probado solo en emulador**). (Dos emuladores idénticos que entran en el mismo cuadro
+no se desempatan nunca, porque hacen exactamente lo mismo; dos consolas reales nunca están en el mismo estado.)
 
 **Orden:**
 
 1. ~~Controlador serie, saludo y puente de dos PyBoy en las pruebas (pantalla de conexión).~~ Hecho.
-2. Del saludo al menú, elección de canción por el maestro y arranque sincronizado.
+2. ~~Del saludo al menú, elección de canción por el jugador 1 y arranque sincronizado.~~ Hecho.
 3. VS completo (puntaje del rival, resultados, corte al perder).
 4. Co-Op completo (marcador de banda, revivir, récord de banda).
 5. Documentación y prueba a mano en emulador con dos ventanas.

@@ -177,6 +177,20 @@ wLinkType::     ds 1     ; mensaje que se está recibiendo (0 = ninguno)
 wLinkPos::      ds 1     ; bytes de datos recibidos de ese mensaje
 wLinkBuf::      ds LINK_MAX_DATA
 wLinkPeer::     ds LINK_HELLO_LEN   ; el saludo del otro: versión y hash de la lista de canciones (dos bytes de 7 bits)
+wLinkGot::      ds 1     ; un bit por mensaje recibido y todavía no atendido (GOTB_...)
+wLinkSilence::  ds 1     ; cuadros seguidos sin oír al otro (conectados)
+wPeerMenu::     ds LINK_MENU_LEN    ; lo que eligió el otro: canción, instrumento, dificultad, banderas ($FF = no se sabe)
+wPeerStart::    ds 1     ; datos de MSG_START, MSG_SET y MSG_GO (ver link.asm)
+wPeerSet::      ds 1
+wPeerGo::       ds 1
+wPeerInstrSeen:: ds 1    ; el último instrumento del jugador 1 que el 2 copió (VS)
+wMenuSent::     ds LINK_MENU_LEN    ; el último estado propio que se mandó
+wMenuMsg::      ds LINK_MENU_LEN + 1
+wReady::        ds 1     ; 1 = este jugador dijo "listo" en el menú
+wLinkStarting:: ds 1     ; cuadros que faltan para echar a andar la canción (0 = todavía no hay cuenta regresiva)
+wMenuRefresh::  ds 1     ; cuadros para volver a mandar el estado del menú aunque no cambie
+wLinkAcked::    ds 1     ; jugador 1: lo último que dijo el 2 de la cuenta (0 no la tiene, 1 sí, $FF no ha dicho)
+wPeerLine::     ds 20
 
 ; --- opciones (seis valores seguidos: el índice del renglón de la pantalla de opciones indexa wOpt) ---
 wOpt::

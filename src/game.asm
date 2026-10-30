@@ -344,6 +344,9 @@ EnterMenu:
     call PrintStr
     ld a, STATE_MENU
     ld [wState], a
+    ldh a, [hLinkOn]
+    and a
+    call nz, MenuLinkEnter  ; 2 jugadores: la canción del jugador 1 y la línea del otro
     call MenuLoadSong
     call QueueSongText
     call QueueInstrument
@@ -496,12 +499,17 @@ QueueCursor:
     ret
 
 MenuFrame:
+    ldh a, [hLinkOn]
+    and a
+    jp nz, MenuFrameLink    ; 2 jugadores (link.asm): filtra los botones y sigue en MenuInput
     di
     ldh a, [hPadNew]
     ld b, a
     xor a
     ldh [hPadNew], a
     ei
+; B = botones nuevos
+MenuInput:
     ld a, b
     and (1 << PADB_UP) | (1 << PADB_DOWN) | (1 << PADB_LEFT) | (1 << PADB_RIGHT)
     ld a, 0
@@ -668,9 +676,18 @@ BeginPlay:
     ld a, LCDCF_ON | LCDCF_BG8000 | LCDCF_BGON | LCDCF_WINON | LCDCF_WIN9C00 | LCDCF_OBJ16 | LCDCF_OBJON
     ldh [hLcdc], a
     ldh [rLCDC], a
+    ldh a, [hLinkOn]
+    and a
+    jr nz, .linkWait
     ld a, 1
     ld [wPlaying], a
     ld a, STATE_PLAY
+    ld [wState], a
+    ret
+.linkWait:
+    xor a                   ; 2 jugadores: la canción echa a andar en LinkWaitFrame, a la par con la otra consola
+    ld [wLinkStarting], a
+    ld a, STATE_LINKWAIT
     ld [wState], a
     ret
 
@@ -767,6 +784,9 @@ PlayFrame:
     jr z, .noPause
     res PADB_START, a
     ldh [hPadNew], a
+    ldh a, [hLinkOn]        ; con 2 jugadores no hay pausa: la otra consola sigue tocando
+    and a
+    jr nz, .noPause
     ei
     jp EnterPause
 .noPause:
