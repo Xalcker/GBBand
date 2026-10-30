@@ -4,6 +4,7 @@
 ; Reglas: main_loop calcula y deja datos en buffers; la ISR solo copia. La ISR NUNCA cambia de banco de ROM
 ; (todo lo que lee es WRAM o código de ROM0). Orden fijo: OAM, cola de VRAM, scroll y LCDC, audio, control, contador
 ; de cuadros. (El audio va después de lo que debe caber en el VBlank: ver docs/decisiones.md.)
+; El byte del cable link (en el maestro) sale en la ISR de STAT a media pantalla (ver StatISR en link.asm).
 ; =============================================================================
 
 SECTION "VBlank ISR", ROM0
@@ -81,6 +82,7 @@ VBlankISR:
 .common:
     ; 5. control, una vez por cuadro (dos lecturas iguales)
     call ReadPad
+
 
     ; 6. contadores
     ld hl, hFrame

@@ -625,6 +625,7 @@ BeginPlay:
     inc a
 .notVs:
     ld [wVsGame], a
+    call CoopBegin          ; Co-Op por cable: el marcador es el de la banda (coop.asm)
     xor a
     ld [wVsCut], a
     call HudDraw
@@ -946,6 +947,13 @@ ResultsFrame:
     ld a, [wVsGame]
     and a
     call nz, ResultsVsUpdate ; VS: el puntaje final del otro puede llegar ya en los resultados
+    ld a, [wCoopWaiting]    ; Co-Op: esperando los datos finales del compañero
+    and a
+    jr z, .shown
+    call CoopResultsReady
+    ret nc
+    jp ResultsShow
+.shown:
     di
     ldh a, [hPadNew]
     ld b, a
