@@ -119,6 +119,9 @@ EnterResults:
     ld hl, TxtNewRecord
     call PrintStr
 .noRecord:
+    ld a, [wVsGame]
+    and a
+    call nz, ResultsVsDraw  ; VS: el puntaje del otro y quién ganó (link.asm)
     ld de, _SCRN0 + 32 * 17 + 2
     ld hl, TxtContinue
     call PrintStr

@@ -8,12 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from gbband_tools import playtest
+from gbband_tools import layout, playtest
 from gbband_tools.linkbridge import LinkBridge
 from gbband_tools.runner import Runner
 
 ROOT = Path(__file__).resolve().parents[2]
-STATE_TITLE, STATE_MENU, STATE_PLAY, STATE_LINK = 0, 1, 2, 7
+STATE_TITLE, STATE_MENU, STATE_PLAY, STATE_RESULTS, STATE_LINK = 0, 1, 2, 4, 7
 LINK_SEARCH, LINK_OK, LINK_WRONG = 0, 1, 2
 IE_SERIAL = 0x08
 
@@ -182,7 +182,7 @@ def connect_to_menu(rom: Path, players: int, mode_a: str = "cgb", mode_b: str = 
     enter_link(bridge, a, players)
     bridge.tick(25)
     enter_link(bridge, b, players)
-    for _ in range(60):
+    for _ in range(400):   # (con un cable que pierde mucho, conectarse puede tardar varios segundos)
         bridge.tick(5)
         if value(a, "wState") == value(b, "wState") == STATE_MENU:
             break
@@ -294,3 +294,130 @@ def test_si_uno_se_va_el_otro_vuelve_al_titulo(rom):
         assert wait_until(bridge, lambda: value(m, "wState") == STATE_TITLE, 200), "el 1 no notó que el 2 se fue"
         assert value(m, "hLinkOn") == 0 and value(m, "wPlayers") == 0
         assert value(m, 0xFFFF) & IE_SERIAL == 0
+
+
+# ---- VS -----------------------------------------------------------------------------------------------------------
+
+def digits(r: Runner, name: str, n: int = 6) -> int:
+    return int("".join(str(d) for d in r.read(name, n)))
+
+
+def attach_bot(r: Runner, bot_name: str) -> None:
+    """Un bot de playtest toca el chart de lo que esta consola eligió (como en run_case, en el gancho de IsrEnd)."""
+    song = playtest.load_song(playtest.song_names()[value(r, "wSong")])
+    chart = song.chart(playtest.INSTRUMENTS[value(r, "wInstrument")], layout.DIFFICULTIES[value(r, "wDifficulty")])
+    bot = playtest.BOTS[bot_name](chart, 1)
+    state = {"last_t": -1, "held": set(), "releases": {}}
+
+    def on_isr(_ctx) -> None:
+        if not value(r, "wPlaying"):
+            return
+        t = int.from_bytes(r.read("wT", 2), "little")
+        for tt in range(state["last_t"] + 1, t + 1):
+            for lane in bot.presses(tt):
+                if lane not in state["held"]:
+                    r.pb.send_input(playtest.PRESS[lane], 1)
+                    state["held"].add(lane)
+                state["releases"][lane] = bot.release_at(tt, lane)
+        state["last_t"] = max(state["last_t"], t)
+        for lane in [lane for lane, until in state["releases"].items() if t >= until]:
+            r.pb.send_input(playtest.RELEASE[lane], 1)
+            state["held"].discard(lane)
+            del state["releases"][lane]
+
+    r.pb.hook_register(0, r.symbols["IsrEnd"], on_isr, None)
+
+
+def choose_song(bridge: LinkBridge, m: Runner, s: Runner, name: str) -> None:
+    target = playtest.song_names().index(name)
+    for _ in range(len(playtest.song_names())):
+        if value(m, "wSong") == target:
+            break
+        tap(bridge, "right", m)
+    assert value(m, "wSong") == target
+    assert wait_until(bridge, lambda: value(s, "wSong") == target, 60)
+
+
+def play_vs(bridge: LinkBridge, m: Runner, s: Runner, bot_m: str, bot_s: str, max_frames: int = 20000) -> None:
+    """Los dos dicen "listo", cada uno con su bot, y se juega hasta que los dos ven el resultado final del otro."""
+    tap(bridge, "start", s)
+    tap(bridge, "start", m)
+    both = lambda: all(value(r, "wState") == STATE_PLAY and value(r, "wPlaying") for r in (m, s))
+    assert wait_until(bridge, both, 120), "la canción no empezó en las dos consolas"
+    attach_bot(m, bot_m)
+    attach_bot(s, bot_s)
+    finished = lambda: all(value(r, "wState") == STATE_RESULTS and value(r, "wRivalFlags") & 4 for r in (m, s))
+    assert wait_until(bridge, finished, max_frames), (
+        "no llegaron los dos a los resultados con el puntaje final del otro: "
+        + str([(value(r, "wState"), value(r, "wRivalFlags"), int.from_bytes(r.read("wT", 2), "little"),
+                int.from_bytes(r.read("wEndFrame", 2), "little"), value(r, "hLinkOn")) for r in (m, s)]))
+    bridge.tick(10)   # (la última línea de VS se encola y se dibuja)
+
+
+def vs_line(r: Runner) -> str:
+    return bytes(r.read(0x9800 + 32 * 16, 20)).decode("ascii")
+
+
+def test_vs_completo_gana_el_de_mas_puntos(rom):
+    a, b, bridge, m, s = connect_to_menu(rom, 1)
+    with a, b:
+        choose_song(bridge, m, s, "demo")
+        play_vs(bridge, m, s, "perfecto", "humano90")
+        sm, ss = digits(m, "wScoreDigits"), digits(s, "wScoreDigits")
+        assert sm > ss > 0
+        # cada uno ve el puntaje final del otro y la misma línea de VS
+        assert digits(m, "wRivalDigits") == ss and digits(s, "wRivalDigits") == sm
+        line = f"GANA J1 POR {sm - ss:06d}".ljust(20)
+        assert vs_line(m) == line and vs_line(s) == line
+        assert value(m, "wVsCut") == value(s, "wVsCut") == 0
+        assert value(m, "wNewRecord") == 1, "la partida completa de VS guarda el récord del ganador"
+        for r in (a, b):
+            r.tick(1)
+        m.screenshot(ROOT / "build" / "test-link" / "vs-resultados-j1.png")
+        s.screenshot(ROOT / "build" / "test-link" / "vs-resultados-j2.png")
+
+
+def test_vs_si_uno_pierde_se_corta_y_gana_el_otro(rom):
+    a, b, bridge, m, s = connect_to_menu(rom, 1)
+    with a, b:
+        choose_song(bridge, m, s, "carrera")
+        play_vs(bridge, m, s, "perfecto", "sin-tocar", max_frames=4000)
+        assert value(s, "wFailed") == 1 and value(m, "wFailed") == 0
+        assert value(m, "wVsCut") == value(s, "wVsCut") == 1
+        end = int.from_bytes(m.read("wEndFrame", 2), "little")
+        assert int.from_bytes(m.read("wT", 2), "little") < end - 600, "la partida debió cortarse antes del final"
+        line = "GANA J1 - J2 PERDIO".ljust(20)
+        assert vs_line(m) == line and vs_line(s) == line
+        assert value(m, "wNewRecord") == 0, "una partida cortada no guarda récord"
+        for r in (a, b):
+            r.tick(1)
+        s.screenshot(ROOT / "build" / "test-link" / "vs-perdio-j2.png")
+
+
+def test_vs_marcador_muestra_al_otro_y_calla_su_canal(rom):
+    """En VS el renglón del combo muestra el puntaje del otro; si el otro falla con otro instrumento, su canal se calla."""
+    a, b, bridge, m, s = connect_to_menu(rom, 1)
+    with a, b:
+        choose_song(bridge, m, s, "carrera")
+        tap(bridge, "down", s)
+        tap(bridge, "right", s)          # el 2 cambia a otro instrumento
+        tap(bridge, "down", s)
+        tap(bridge, "down", s)
+        tap(bridge, "right", s)          # y a "sin fallo", para fallar sin perder
+        assert value(s, "wNoFail") == 1 and value(s, "wInstrument") != value(m, "wInstrument")
+        tap(bridge, "start", s)
+        tap(bridge, "start", m)
+        assert wait_until(bridge, lambda: all(value(r, "wPlaying") for r in (m, s)), 120)
+        attach_bot(m, "perfecto")
+        attach_bot(s, "sin-tocar")
+        bridge.tick(900)
+        row = bytes(m.read(0x9C00 + 32 + 5, 10)).decode("ascii")    # (el marcador va en las columnas 5 a 14)
+        assert row.startswith("J2  ") and int(row[4:]) == digits(m, "wRivalDigits")
+        assert digits(m, "wScoreDigits") > 0 and value(s, "wMuted") == 1
+        assert value(m, "wRivalFlags") & 2, "el 1 debe saber que el 2 está callado"
+        channel = value(s, "wInstrument")
+        nr51 = value(m, "wNr51Out")
+        assert nr51 & (0x11 << channel) == 0, f"NR51 {nr51:02X}: el canal del 2 debía estar callado en la consola del 1"
+        for r in (a, b):
+            r.tick(1)
+        m.screenshot(ROOT / "build" / "test-link" / "vs-marcador-j1.png")

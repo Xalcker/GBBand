@@ -117,7 +117,7 @@ StageBeatInit:
     jr .catchUp
 .ready:
     ld hl, _VRAM + TILE_LAMP * 16       ; la VRAM guarda el reflector como lo dejó la partida anterior: encendido
-    ld de, Tiles + TILE_LAMP * 16
+    ld de, LampOnTile
     ld bc, 16
     call CopyMem
     ld a, 1
@@ -149,11 +149,11 @@ StageBeat:
     jr z, .notLamp
     res BEAT_LAMP, a
     ld [wBeatPending], a
-    ld hl, Tiles + TILE_LAMP * 16       ; encendido
+    ld hl, LampOnTile                   ; encendido
     ld a, [wLampLit]
     and a
     jr nz, .lampSrc
-    ld hl, Tiles + TILE_LAMP_OFF * 16   ; apagado
+    ld hl, LampOffTile                  ; apagado
 .lampSrc:
     ld de, _VRAM + TILE_LAMP * 16
     ld b, 16
