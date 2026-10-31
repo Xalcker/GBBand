@@ -23,6 +23,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from bandcore import editor as bandeditor
+
 from . import audio_gb as gb
 from . import ir, songs
 from .chart import DIFFICULTIES, BeatGrid, ChartNote, chart_bytes
@@ -48,13 +50,53 @@ from .drums import (
 )
 from .m3u import find_playlist
 
-HTML_PATH = Path(__file__).with_name("editor.html")
-HOME_PATH = Path(__file__).with_name("home.html")  # la página sin canción abierta
-MENU_PATH = Path(__file__).with_name("menu.html")  # el menú Archivo, compartido por las dos
+# Las páginas (editor.html, home.html y el menú Archivo) son las de bandcore, compartidas con NESBand, GENBand y
+# NGBand; aquí van el perfil de la Game Boy y su reproductor
+HTML_PATH = bandeditor.EDITOR_HTML
+HOME_PATH = bandeditor.HOME_HTML  # la página sin canción abierta
 GBPLAYER_PATH = Path(__file__).with_name("gbplayer.js")  # el APU que toca la canción
 ROOT = songs.ROOT
 SONGS_DIR = songs.SONGS_DIR
 SOURCE_SUFFIXES = (".nsf", ".nsfe", ".txt")
+
+_NES_CHANNELS = [
+    {"id": "Square1", "label": "Square 1", "color": "#58d0ff", "discrete": False},
+    {"id": "Square2", "label": "Square 2", "color": "#b58cff", "discrete": False},
+    {"id": "Triangle", "label": "Triángulo", "color": "#6be88a", "discrete": False},
+    {"id": "Noise", "label": "Ruido", "color": "#ffb45e", "discrete": True},
+    {"id": "DPCM", "label": "DPCM", "color": "#ff7a9c", "discrete": True},
+]
+PROFILE = {
+    "game": "GBBand",
+    "cli": "gbband",
+    "pads": ["←", "↓", "→", "B", "A"],
+    "channels": _NES_CHANNELS,  # la IR usa los canales del NES (ver ir.py)
+    "drumInstrument": True,
+    "exportLabel": "Exportar a la ROM",
+    "exportTitle": "Guarda y regenera los charts, el audio y la ficha de la canción (como `gbband reimport`)",
+    "playerTitle": "Toca la canción con el mismo stream de registros del APU que lleva la ROM",
+    # La Game Boy tiene 4 canales: el ruido y el DPCM del NES suenan los dos en el CH4; gbplayer.js da audio en -1..1
+    "stems": [["Square1"], ["Square2"], ["Triangle"], ["Noise", "DPCM"]],
+    "stemScale": 1,
+    "import": {
+        "label": "Archivo a importar (NSF o proyecto de FamiStudio .txt)",
+        "placeholder": "C:\\ruta\\cancion.nsf, songs_src\\cancion.nsf o audio\\cancion.txt",
+        "hint": "Importar genera el audio (stream de registros del APU), los charts y la ficha en "
+                "<code>src/songs/&lt;identificador&gt;/</code>. Puede tardar un poco.",
+        "status": "Importando…",
+        "tracks": True,
+        "durationLabel": "Segundos a grabar (NSF)",
+        "durationPlaceholder": "del .m3u, o 120",
+        "durationPattern": r"\.nsfe?$",
+    },
+}
+# gbplayer.js toca el stream de la ROM; el editor le pide los cuadros de audio que tiene la canción
+_PLAYER_ADAPTER = """
+window.BandPlayer = {
+  FPS: GbPlayer.FPS,
+  render: (player, data, opts) => GbPlayer.render(player, data.audioFrames, { ...opts, stems: true }),
+};
+"""
 
 
 @dataclass
@@ -205,9 +247,10 @@ def export_to_rom(src: SongSource, charts: dict[str, list[ChartNote]], assignmen
 
 
 def render_page(payload: dict, template: Path = HTML_PATH) -> str:
-    data = json.dumps(payload, ensure_ascii=True, separators=(",", ":")).replace("</", "<\\/")
-    return (template.read_text(encoding="utf-8").replace("__MENU__", MENU_PATH.read_text(encoding="utf-8"), 1)
-            .replace("__GBPLAYER__", GBPLAYER_PATH.read_text(encoding="utf-8"), 1).replace("__DATA__", data, 1))
+    """La página del editor de bandcore con el perfil de la Game Boy. Escuchar existe cuando la página es editable."""
+    payload = {"player": bool(payload.get("editable")), **payload}
+    player = GBPLAYER_PATH.read_text(encoding="utf-8") + _PLAYER_ADAPTER
+    return bandeditor.render_page(payload, PROFILE, player, template)
 
 
 # --- Menú Archivo: canciones disponibles, fuentes para importar y la canción abierta -----------
