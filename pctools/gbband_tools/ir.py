@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from bandcore.chart import Note  # noqa: F401  (la misma en los cuatro juegos)
+
 CHANNELS = ("Square1", "Square2", "Triangle", "Noise", "DPCM")
 TONAL = ("Square1", "Square2", "Triangle")
 DRUM_CHANNELS = ("Noise", "DPCM")
@@ -40,17 +42,6 @@ def hz_midi(freq: float) -> float:
     import math
 
     return 69 + 12 * math.log2(freq / 440.0)
-
-
-@dataclass(frozen=True)
-class Note:
-    """Una nota (o un golpe de batería): lo que necesita el generador de charts."""
-
-    frame: int  # cuadro desde que empieza la canción
-    pitch: int  # número MIDI (solo importa para comparar alturas)
-    duration: int
-    extra: int | None = None  # otra altura del mismo gesto (un arpegio fusionado: un acorde "roto"); ver chart.merge_attacks
-    instrument: str | None = None  # nombre del instrumento (en ruido y DPCM, parte de lo que identifica un golpe)
 
 
 @dataclass

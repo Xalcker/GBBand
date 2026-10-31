@@ -16,30 +16,35 @@ platillos se tocan como toms.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
-from pathlib import Path
+
+# Papeles, drums.json y el chart de batería son los mismos en los cuatro juegos: viven en bandcore
+from bandcore.drums import (  # noqa: F401
+    CYMBAL_WEIGHT_PENALTY,
+    DRUMS_FILE,
+    DRUMS_VERSION,
+    FOLD,
+    MAX_BUTTONS,
+    MAX_HANDS,
+    MERGE_FRAMES,
+    MIN_GROUP_HITS,
+    PRO_CYMBALS,
+    ROLES,
+    ROLE_LABELS,
+    ROLE_LANE,
+    ROLE_WEIGHT,
+    Hit,
+    check_assignment,
+    dump_drums,
+    load_drums,
+    save_drums,
+)
 
 from .chart import DIFFICULTIES, BeatGrid, ChartNote, enforce_lane_gap, star_notes
 from .ir import Note, SongIR as Song, midi_to_name
 
-DRUMS_FILE = "drums.json"
-DRUMS_VERSION = 1
+
 DRUM_CHANNELS = ("Noise", "DPCM")
-ROLE_LANE = {"tom3": 0, "snare": 1, "tom1": 2, "tom2": 3, "kick": 4}
-ROLE_LABELS = {"kick": "Bombo (barra naranja)", "snare": "Tarola (rojo)", "tom1": "Tom 1 / Hi-hat (amarillo)",
-               "tom2": "Tom 2 / Ride (azul)", "tom3": "Tom 3 / Crash (verde)"}
-ROLES = tuple(ROLE_LABELS)
-ROLE_WEIGHT = {"kick": 3, "snare": 3, "tom1": 2, "tom2": 2, "tom3": 2}
-# Con menos dificultad, los toms se juntan en los que quedan: fácil usa bombo, tarola y tom 1; medio agrega el 2
-FOLD = {"facil": {"tom2": "tom1", "tom3": "tom1"}, "medio": {"tom3": "tom2"}, "dificil": {}, "experto": {}}
-# Botones a la vez: como máximo 3 (el pie y dos manos); fácil y medio quedan en 1 y 2
-MAX_BUTTONS = {"facil": 1, "medio": 2, "dificil": 3, "experto": 3}
-MAX_HANDS = 2   # golpes de mano a la vez (sin contar el bombo): solo hay dos manos
-PRO_CYMBALS = {"experto"}   # dificultades donde los platillos se distinguen de los toms
-CYMBAL_WEIGHT_PENALTY = 0.5   # los platillos (hi-hat) son lo primero que se quita al reducir
-MERGE_FRAMES = 1   # golpes a esta distancia son el mismo momento
-MIN_GROUP_HITS = 3   # sugerencia: grupos con menos golpes no se asignan
 
 
 @dataclass(frozen=True)
@@ -129,45 +134,7 @@ def suggest_assignment(groups: list[Group]) -> dict[str, dict]:
 # --- drums.json -----------------------------------------------------------------------------------
 
 
-def load_drums(song_dir: Path) -> dict[str, dict] | None:
-    """La asignación guardada (grupo -> {"lane", "cymbal"}), o None si la canción aún no tiene."""
-    path = song_dir / DRUMS_FILE
-    if not path.exists():
-        return None
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if data.get("version") != DRUMS_VERSION:
-        raise ValueError(f"{path}: versión de drums.json no soportada ({data.get('version')})")
-    return data.get("groups", {})
-
-
-def check_assignment(assignment: dict[str, dict]) -> None:
-    for key, item in assignment.items():
-        if item.get("lane") not in (*ROLES, None):
-            raise ValueError(f"{key}: papel desconocido {item.get('lane')!r}")
-
-
-def dump_drums(assignment: dict[str, dict]) -> str:
-    lines = [f'{{\n  "version": {DRUMS_VERSION},\n  "groups": {{']
-    lines.append(",\n".join(
-        f"    {json.dumps(key, ensure_ascii=False)}: {json.dumps({'lane': item.get('lane'), 'cymbal': bool(item.get('cymbal'))})}"
-        for key, item in sorted(assignment.items())))
-    lines.append("  }\n}\n")
-    return "\n".join(lines)
-
-
-def save_drums(song_dir: Path, assignment: dict[str, dict]) -> None:
-    check_assignment(assignment)
-    (song_dir / DRUMS_FILE).write_text(dump_drums(assignment), encoding="utf-8", newline="\n")
-
-
 # --- Chart --------------------------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class Hit:
-    frame: int
-    role: str
-    cymbal: bool
 
 
 def drum_hits(song: Song, assignment: dict[str, dict]) -> list[Hit]:
