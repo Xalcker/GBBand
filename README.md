@@ -153,7 +153,11 @@ uv run gbband import-song "songs_src/Juego - Pista.vgz" --name juego_pista      
 uv run gbband import-song "songs_src/Juego.gbs" --track 3 --name juego_nivel1       # GBS, con su .m3u al lado
 uv run gbband reimport            # todas, con las mismas opciones, tras mejorar el generador (o una: reimport tormenta)
 uv run gbband list-songs          # regenera build/list.asm (el build lo corre solo)
+uv run gbband export-notes "songs_src/Juego.nsf" --track 2 --out notas.json   # notas en JSON, para arreglarlas en otra consola
 ```
+
+`export-notes` saca las notas de cualquier fuente (con la misma IR que `import-song`) y la batería clasificada por
+papeles; GENBand las arregla para la Genesis con `audio/arreglo_fm.py` (ver su README).
 
 Acepta proyectos de texto de FamiStudio (`.txt`, como los de `audio/`), NSF, VGM de Game Boy (`.vgm` y `.vgz`) y GBS. Con
 el `.m3u` de un NSF o un GBS, `--track N` saca el título, el juego y la duración; sin él, `--song N` (desde 0), `--title`,

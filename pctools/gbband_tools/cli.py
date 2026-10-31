@@ -62,6 +62,20 @@ def cmd_import_song(args: argparse.Namespace) -> None:
     songs.list_songs()
 
 
+def cmd_export_notes(args: argparse.Namespace) -> None:
+    from . import drums, notes_export, songs
+
+    options = songs.Options(source=str(args.source), name="export", title=args.title, game=args.game,
+                            track=args.track, song=args.song, duration=args.duration)
+    assignment = drums.load_drums(args.drums.parent) if args.drums else None
+    data = notes_export.export_notes(args.source, options, assignment)
+    notes_export.write_notes(data, args.out)
+    counts = ", ".join(f"{name} {len(notes)}" for name, notes in data["channels"].items())
+    print(f"{args.out}: {data['title']} ({data['game']}), {data['frames'] / 60:.1f} s; {counts}, batería {len(data['drums'])}")
+    for line in data["log"]:
+        print(f"  aviso: {line}")
+
+
 def cmd_list_songs(args: argparse.Namespace) -> None:
     from . import songs
 
@@ -106,6 +120,16 @@ def main() -> None:
     p.add_argument("--beat-frames", type=int, help="cuadros por tiempo, si la estimación automática falla")
     p.add_argument("--gain", help="ganancia de volumen por canal, por ejemplo ch1=1.0,ch2=0.8,ch3=1.0")
     p.set_defaults(func=cmd_import_song)
+    p = sub.add_parser("export-notes", help="saca las notas de una fuente (NSF, VGM, GBS, FamiStudio) a JSON para arreglarlas en otra consola")
+    p.add_argument("source", type=Path)
+    p.add_argument("--out", type=Path, required=True, help="archivo JSON de salida")
+    p.add_argument("--title")
+    p.add_argument("--game")
+    p.add_argument("--track", type=int, help="pista como la numera el .m3u (desde 1)")
+    p.add_argument("--song", type=int, default=0, help="índice de la canción dentro del archivo (desde 0)")
+    p.add_argument("--duration", type=int, help="segundos a grabar (NSF, GBS; VGM con bucle)")
+    p.add_argument("--drums", type=Path, help="drums.json con la asignación de la batería (si no, la sugerencia automática)")
+    p.set_defaults(func=cmd_export_notes)
     p = sub.add_parser("list-songs", help="regenera build/list.asm (las canciones que entran a la ROM)")
     p.add_argument("--solo", nargs="*", help="solo las canciones que coincidan con estos patrones")
     p.add_argument("--release", action="store_true", help="solo las canciones versionadas en git")
