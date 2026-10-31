@@ -157,7 +157,9 @@ uv run gbband export-notes "songs_src/Juego.nsf" --track 2 --out notas.json   # 
 ```
 
 `export-notes` saca las notas de cualquier fuente (con la misma IR que `import-song`) y la batería clasificada por
-papeles; GENBand las arregla para la Genesis con `audio/arreglo_fm.py` (ver su README).
+papeles; GENBand las arregla para la Genesis con `audio/arreglo_fm.py` (ver su README), y `bandcore.famistudio` las
+vuelve un proyecto de FamiStudio para NESBand, GBBand y NGBand. `import-song` y `export-notes` también aceptan VGM del
+NES: sus escrituras pasan por el mismo APU emulado que un NSF (`nesvgm.py`).
 
 Acepta proyectos de texto de FamiStudio (`.txt`, como los de `audio/`), NSF, VGM de Game Boy (`.vgm` y `.vgz`) y GBS. Con
 el `.m3u` de un NSF o un GBS, `--track N` saca el título, el juego y la duración; sin él, `--song N` (desde 0), `--title`,

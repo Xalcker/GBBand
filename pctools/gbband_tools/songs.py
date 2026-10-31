@@ -97,8 +97,13 @@ def load_source(path: Path, options: Options) -> tuple[ir.SongIR, str, str]:
 
         return nsf.load(path, options)
     if suffix in (".vgm", ".vgz"):
-        from . import vgm
+        from bandcore.vgm import read_vgm
 
+        from . import nesvgm, vgm
+
+        # VGM del NES: el mismo APU emulado que un NSF; si no, el de la Game Boy (que rechaza los de otros chips)
+        if "nes_apu" in read_vgm(path).clocks:
+            return nesvgm.load(path, options)
         return vgm.load(path, options)
     if suffix == ".gbs":
         from . import gbs

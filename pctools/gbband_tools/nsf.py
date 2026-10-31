@@ -284,11 +284,12 @@ class NsfMachine:
             self.prg_ram[addr - 0x6000] = value
 
 
-def dpcm_zcr(machine: NsfMachine, start: int, length: int) -> float:
-    """Cruces por cero por bit del sample (modulación delta de 1 bit): bajo = grave (bombo), alto = agudo o ruido."""
+def dpcm_zcr(read, start: int, length: int) -> float:
+    """Cruces por cero por bit del sample (modulación delta de 1 bit): bajo = grave (bombo), alto = agudo o ruido.
+    `read(addr)` lee la memoria donde está el sample."""
     bits = []
     for i in range(min(length, 400)):
-        byte = machine.read(start + i if start + i <= 0xFFFF else start)
+        byte = read(start + i if start + i <= 0xFFFF else start)
         bits += [byte >> k & 1 for k in range(8)]
     flips = sum(1 for a, b in zip(bits, bits[1:]) if a != b)
     return flips / max(len(bits), 1)
@@ -305,14 +306,10 @@ def run(path: Path, song: int, seconds: int, log: list[str] | None = None) -> ir
     machine = NsfMachine(header)
     cpu = machine.cpu
     cpu.call(header.init, a=song, x=0)
-    frames = int(seconds * ir.NES_FPS)
-    tracks = {c: ir.Track.silent(frames) for c in ir.TONAL}
-    noise_hits: list[tuple[int, int, int, bool]] = []  # (cuadro, índice de periodo, vol, modo corto)
-    dpcm_hits: list[tuple[int, float, int]] = []  # (cuadro, zcr, duración en cuadros)
-    noise_active = [0] * frames
-    apu = machine.apu
     over_budget = 0
-    for f in range(frames):
+
+    def play(f: int) -> None:
+        nonlocal over_budget
         try:
             used = cpu.call(header.play, limit=3 * CYCLES_PER_FRAME)
         except TimeoutError:
@@ -320,6 +317,24 @@ def run(path: Path, song: int, seconds: int, log: list[str] | None = None) -> ir
             over_budget += 1
         if used > CYCLES_PER_FRAME:
             over_budget += 1
+
+    frames = int(seconds * ir.NES_FPS)
+    tracks, noise_hits, dpcm_hits, noise_active = record(machine.apu, frames, play, machine.read)
+    result = ir.SongIR(path.stem, header.title, frames, tracks, {c: [] for c in ir.CHANNELS}, None, source="NSF")
+    if over_budget:
+        result.warn(f"{over_budget} cuadros donde la rutina de reproducción tardó más de un cuadro NES de CPU")
+    return build_ir(result, tracks, noise_hits, dpcm_hits, noise_active)
+
+
+def record(apu: Apu, frames: int, play, read) -> tuple[dict, list, list, list]:
+    """Graba cuadro por cuadro el estado de cada canal del APU. `play(f)` escribe los registros del cuadro `f` (la
+    rutina de reproducción de un NSF, o las escrituras de un VGM) y `read(addr)` lee la memoria (los samples DPCM)."""
+    tracks = {c: ir.Track.silent(frames) for c in ir.TONAL}
+    noise_hits: list[tuple[int, int, int, bool]] = []  # (cuadro, índice de periodo, vol, modo corto)
+    dpcm_hits: list[tuple[int, float, int]] = []  # (cuadro, zcr, duración en cuadros)
+    noise_active = [0] * frames
+    for f in range(frames):
+        play(f)
         # estado de cada canal al inicio del cuadro (después de lo que escribió la rutina de reproducción y del
         # primer reloj del secuenciador)
         apu.clock_quarter()
@@ -344,13 +359,15 @@ def run(path: Path, song: int, seconds: int, log: list[str] | None = None) -> ir
             apu.noise_trig = False
         for addr, length, rate in apu.dpcm_starts:
             dur = max(1, round(length * 8 * DPCM_RATES[rate] / CYCLES_PER_FRAME))
-            dpcm_hits.append((f, dpcm_zcr(machine, addr, length), dur))
+            dpcm_hits.append((f, dpcm_zcr(read, addr, length), dur))
         apu.dpcm_starts.clear()
         apu.finish_frame()
+    return tracks, noise_hits, dpcm_hits, noise_active
 
-    result = ir.SongIR(path.stem, header.title, frames, tracks, {c: [] for c in ir.CHANNELS}, None, source="NSF")
-    if over_budget:
-        result.warn(f"{over_budget} cuadros donde la rutina de reproducción tardó más de un cuadro NES de CPU")
+
+def build_ir(result: ir.SongIR, tracks: dict, noise_hits: list, dpcm_hits: list, noise_active: list) -> ir.SongIR:
+    """Las notas de la IR a partir de lo grabado por `record`."""
+    frames = result.length_frames
     for name in ir.TONAL:
         result.notes[name] = tonal_notes(tracks[name])
     for f, period, vol, short in noise_hits:
