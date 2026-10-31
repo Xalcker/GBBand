@@ -43,6 +43,9 @@ Todo el código de GBBand lo escribe una IA (Claude). Yo solo pongo las ideas y 
    en `tools/mesen/`. Es el depurador (carga el `.sym`).
 3. **uv** para las herramientas de Python: [instrucciones](https://docs.astral.sh/uv/getting-started/installation/).
    `uv sync` crea el entorno (incluye PyBoy, el corredor de pruebas).
+4. **[bandcore](https://github.com/Xalcker/bandcore)**, el lector de VGM que comparten las versiones de Band: se
+   clona junto a este repositorio (`git clone https://github.com/Xalcker/bandcore.git ../bandcore`) y `uv sync` lo
+   instala desde ahí.
 
 `tools/` está en `.gitignore`: cada máquina baja sus propias herramientas. **FamiStudio no hace falta**: las canciones
 originales son proyectos de texto que GBBand lee solo, los NSF se ejecutan en un 6502 propio y los GBS en un SM83 propio.
