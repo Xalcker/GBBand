@@ -20,6 +20,10 @@ from dataclasses import dataclass, field
 
 from bandcore.chart import Note  # noqa: F401  (la misma en los cuatro juegos)
 
+from bandcore.nesapu import (  # noqa: F401  (la misma clase que graba el APU del NES)
+    Track,
+)
+
 CHANNELS = ("Square1", "Square2", "Triangle", "Noise", "DPCM")
 TONAL = ("Square1", "Square2", "Triangle")
 DRUM_CHANNELS = ("Noise", "DPCM")
@@ -42,21 +46,6 @@ def hz_midi(freq: float) -> float:
     import math
 
     return 69 + 12 * math.log2(freq / 440.0)
-
-
-@dataclass
-class Track:
-    """El estado de un canal tonal en cada cuadro. `freq` = 0 significa silencio.
-    `trig` marca el cuadro en que arranca una nota (reinicia la envolvente y la fase)."""
-
-    freq: list[float]
-    vol: list[int]
-    duty: list[int]
-    trig: list[bool]
-
-    @classmethod
-    def silent(cls, frames: int) -> "Track":
-        return cls([0.0] * frames, [0] * frames, [2] * frames, [False] * frames)
 
 
 @dataclass
