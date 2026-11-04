@@ -98,7 +98,7 @@ Decisiones menores que tomé yo, con su motivo. Las de gran tamaño se proponen 
 10. **Las colas ($40 y $80) y las frases estelares ($20) ya vienen en los charts**, pero la ROM todavía las ignora (una cola es
     una nota normal y el fin de cola se salta): se dibujan y se juegan en la fase 4. `enforce_lane_gap` mira solo las gemas;
     habrá que reimportar cuando las colas ocupen tiles.
-11. **Pruebas.** `GBBAND_COMPLETA=1` corre las diez canciones (243 pruebas, unos 140 s); sin ella, tres (unas 90). El bot de
+11. **Pruebas.** `uv run gbband test` corre las diez canciones (341 pruebas, unos 140 s; `GBBAND_COMPLETA=1` por dentro); con `--rapida`, tres (243 pruebas). El bot de
     cada caso elige canción, instrumento y dificultad con el menú, como un jugador, y comprueba el título mostrado.
 12. **El editor** reutiliza la página de NESBand: sus canales siguen siendo Square 1/2, Triángulo, Ruido y DPCM (la IR), pero
     "Escuchar" toca el stream de la ROM (4 canales; Ruido y DPCM comparten el CH4). `Exportar a la ROM` reimporta la canción.

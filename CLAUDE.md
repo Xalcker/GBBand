@@ -23,7 +23,8 @@ conoce SM83. Diseño en `docs/diseno.md`, decisiones en `docs/decisiones.md`.
 ```bash
 .\build.ps1                 # Windows -> build/gbband.gb (+ .sym, .map)      ./build.sh en macOS / Linux
 .\build.ps1 -Release        # build/release/gbband-v<versión>.gb + .sha256 + LICENSE   (./build.sh --release)
-.\tests\run_tests.ps1       # build + pytest (gráficos y ROM en PyBoy, DMG y CGB)       ./tests/run_tests.sh
+uv run gbband test          # build + pytest (gráficos y ROM en PyBoy, DMG y CGB; igual en macOS y Windows); --rapida, --no-build, --lista, patrón
+                            # (tests/run_tests.ps1 y .sh son envoltorios; mismo comando `<juego> test` en NESBand, GENBand y NGBand, ver bandcore.testrun)
 uv run gbband build-gfx     # src/chr/*.tiles -> build/chr/*.2bpp y PNG de contacto
 uv run gbband build-font    # regenera src/chr/font.tiles (necesita Pillow, grupo dev)
 uv run gbband smoke build/gbband.gb   # corre el ROM en DMG y CGB y deja capturas en build/smoke-*/
@@ -34,7 +35,7 @@ uv run gbband import-song audio/tormenta.txt --name tormenta --title "Tormenta d
 uv run gbband reimport [nombre]   # vuelve a importar con las opciones de import.json (conserva drums.json y edits.json)
 uv run gbband list-songs          # regenera build/list.asm (el build lo corre solo; --solo / --release)
 uv run gbband edit-chart [nombre] # editor visual de charts con "Escuchar" (el mismo stream de la ROM)
-GBBAND_COMPLETA=1 .\tests\run_tests.ps1   # las diez canciones (sin la variable, tres representativas)
+uv run gbband test --rapida     # tres canciones representativas (sin --rapida, las diez: GBBAND_COMPLETA=1 por dentro)
 .\build.ps1 -Colocacion A -Nombre A   # ROM con la colocación A (COLOCACION=A NOMBRE=A ./build.sh)
 ```
 

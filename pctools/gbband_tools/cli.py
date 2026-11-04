@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -104,6 +107,30 @@ def cmd_edit_chart(args: argparse.Namespace) -> None:
         editor.serve(args.name, args.port, not args.no_open)
 
 
+def cmd_test(args: argparse.Namespace) -> int:
+    """Las pruebas de GBBand son pytest con PyBoy (sin ventana). Mismas opciones que ``<juego> test`` de los demás:
+    sin ``--rapida`` corren las diez canciones; con ella, tres representativas. Los patrones filtran con ``-k``."""
+    from bandcore import testrun
+
+    patterns = testrun.split_patterns(args.patterns)
+    pytest_args = ["-q"] + (["--collect-only"] if args.lista else [])
+    if patterns:
+        pytest_args += ["-k", " or ".join(patterns)]
+    if not args.lista and not args.no_build:
+        build = testrun.build_command(ROOT)
+        if build is None:
+            print("No hay cómo compilar aquí (falta build.sh o build.ps1). Usa --no-build.", file=sys.stderr)
+            return 1
+        if subprocess.run(build, cwd=ROOT).returncode != 0:
+            return 1
+    env = dict(os.environ)
+    if args.rapida:
+        env.pop("GBBAND_COMPLETA", None)
+    else:
+        env["GBBAND_COMPLETA"] = "1"
+    return subprocess.run([sys.executable, "-m", "pytest", *pytest_args], cwd=ROOT, env=env).returncode
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="gbband", description="Herramientas de PC de GBBand")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -151,5 +178,12 @@ def main() -> None:
     smoke.add_argument("--frames", type=int, default=120)
     smoke.add_argument("--out")
     smoke.set_defaults(func=cmd_smoke)
+    from bandcore import testrun
+
+    p = sub.add_parser("test", help="compila y corre las pruebas (pytest con PyBoy, DMG y CGB; sin ventana; igual en macOS y Windows)")
+    testrun.add_arguments(p, jobs=False)
+    p.set_defaults(func=cmd_test)
     args = parser.parse_args()
-    args.func(args)
+    code = args.func(args)
+    if isinstance(code, int) and code:
+        sys.exit(code)

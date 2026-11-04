@@ -1,9 +1,7 @@
-﻿# Compila y corre las pruebas: pytest (gráficos, stream de audio, charts y juego completo en PyBoy, modos DMG y CGB).
-# Uso:  .\tests\run_tests.ps1 [-NoBuild]
-# Incluye los bots de juego (perfecto, sin tocar, machacando) en DMG y CGB; dejan resultado.txt y capturas en build\test-demo-<bot>-<dificultad>-<modo>.
-param([switch]$NoBuild)
-$ErrorActionPreference = 'Stop'
+﻿# Compila y corre las pruebas: pytest (gráficos, audio, charts y juego completo en PyBoy, modos DMG y CGB).
+# Envoltorio de `uv run gbband test` (igual en macOS y Windows).
+# Uso:  .\tests\run_tests.ps1 [--no-build] [--rapida] [--lista] [patron ...]
+#   --rapida   tres canciones representativas (cambios del motor); sin ella, las diez
 $root = Split-Path $PSScriptRoot -Parent
-if (-not $NoBuild) { & (Join-Path $root 'build.ps1'); if ($LASTEXITCODE -ne 0) { exit 1 } }
-& uv run --project $root pytest -q
+& uv run --project $root gbband test @args
 exit $LASTEXITCODE

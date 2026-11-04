@@ -112,12 +112,17 @@ El resultado es `build/gbband.gb` (con `build/gbband.sym` para el depurador). Op
 | Colocación | `-Colocacion A` / `COLOCACION=A` | gemas con una fila de tiles (como NESBand) en vez de los 4 desplazamientos |
 
 ```bash
-.\tests\run_tests.ps1          # Windows
-./tests/run_tests.sh           # macOS / Linux
+uv run gbband test                # compila y corre todo (macOS y Windows, el mismo comando)
+uv run gbband test --rapida       # tres canciones representativas
+uv run gbband test --no-build link,rom   # sin compilar, solo las pruebas que coinciden (pytest -k)
 ```
 
-Las pruebas compilan el ROM y corren bots en PyBoy, en modo DMG y en CGB (con `GBBAND_COMPLETA=1`, las diez canciones; sin
-ella, tres representativas, unos 60 s). Por canción e instrumento: un bot **perfecto** (puntaje exacto, 100 %, cada nota del
+`tests/run_tests.ps1` y `tests/run_tests.sh` son envoltorios de ese mismo comando; las opciones son las de los otros tres
+juegos (el corredor compartido está en `bandcore.testrun`; aquí solo se usa para compilar y leer las opciones, porque las
+pruebas son pytest).
+
+Las pruebas compilan el ROM y corren bots en PyBoy, en modo DMG y en CGB (sin `--rapida`, las diez canciones; con ella, tres
+representativas, unos 60 s). Por canción e instrumento: un bot **perfecto** (puntaje exacto, 100 %, cada nota del
 chart cae en el mismo cuadro que el alta de nota del canal de su instrumento, 0 cuadros atrasados), otro que **no toca nada**
 (todo falla y solo se calla el canal del instrumento) y otro que **machaca botones**. Además hay pruebas del conversor de
 audio, del formato del stream, de los charts, de los importadores de NSF, VGM y GBS (con archivos sintéticos; el SM83 se
