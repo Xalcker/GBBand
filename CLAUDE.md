@@ -94,3 +94,5 @@ Mesen de pruebas: `tools\mesen\Mesen.exe --testrunner <rom absoluta> <script.lua
 ` desde bash:** no armes parches con heredoc que lleven `
 ` dentro de comillas triples (se vuelven
   saltos de línea reales); usa Edit o un script escrito con Write.
+- **Paridad entre versiones:** al terminar una mejora, actualiza `../NESBand/docs/paridad.md` (la fila y la columna GB) y anota en
+  "Pendientes por versión" lo que falta en NES y GEN.

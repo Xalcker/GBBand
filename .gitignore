@@ -34,3 +34,6 @@ __pycache__/
 
 # Partidas guardadas de los emuladores
 *.sav
+
+# macOS
+.DS_Store
