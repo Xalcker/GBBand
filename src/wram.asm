@@ -137,6 +137,13 @@ wJQSus::        ds 16    ; la entrada es de notas sostenidas (con cola)
 wTailEnd::      ds 10    ; por carril: cuadro en que termina su cola ($FFFF = todavía no se sabe)
 wHold::         ds 1     ; carriles que se están sosteniendo
 wJQStar::       ds 16    ; la entrada es una nota de frase estelar
+wJQAlign::      ds 16    ; la nota se dibujó alineada a la fila (para borrarla en el mismo lugar)
+wJAlign::       ds 1     ; el bit del mapa de la nota que el juez acaba de leer (1 = alineada a la fila)
+wMapB::         ds 2     ; cursor del mapa de notas alineadas del armador de filas (ver MapInit en highway.asm)
+wMapBBit::      ds 1
+wMapJ::         ds 2     ; el del juez
+wMapJBit::      ds 1
+wErAlignTmp::   ds 1
 wTmpStar::      ds 1
 wStarEnergy::   ds 1
 wStarActive::   ds 1
@@ -147,6 +154,7 @@ wHoldTick::     ds 5
 wNEnd::         ds 1     ; la entrada que se leyó es un fin de cola
 wNSust::        ds 1     ; la nota que se leyó tiene cola
 wNCym::         ds 1     ; batería: la nota que se leyó es un platillo (bit $40 del chart)
+wNAlign::       ds 1     ; la nota que leyó FetchNote se dibuja alineada a la fila (su bit del mapa)
 wTailOpen::     ds 1     ; carriles con una cola abierta en la fila que se arma
 wPressLanes::   ds 1
 wTryBit::       ds 1

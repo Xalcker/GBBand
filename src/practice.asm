@@ -191,6 +191,17 @@ PracticeSeek:
     ld [wSeekF], a
     ld a, d
     ld [wSeekF + 1], a
+    push hl                 ; una entrada con carriles que se salta también salta su bit del mapa (los dos cursores)
+    inc hl
+    ld a, [hl]
+    and $1F
+    jr z, .noBit
+    ld hl, wMapB
+    call MapTake
+    ld hl, wMapJ
+    call MapTake
+.noBit:
+    pop hl
     inc hl
     inc hl
     jr .scan

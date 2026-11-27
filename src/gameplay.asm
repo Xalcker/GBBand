@@ -49,6 +49,7 @@ GameplayInit:
     ld [hl], a
     ld [wJQHead], a
     ld [wJQCount], a
+    ld [wJAlign], a
     ld [wHeldPrev], a
     ld [wHeld], a
     ld [wAirCount], a
@@ -120,6 +121,10 @@ JudgeFeed:
 .noCarry:
     bit 7, c
     jr z, .lanesEntry
+    push bc                 ; un fin de cola también tiene su bit en el mapa (siempre 0): se salta
+    ld hl, wMapJ
+    call MapTake
+    pop bc
     ld a, [wJFrame]         ; fin de cola
     ld e, a
     ld a, [wJFrame + 1]
@@ -133,6 +138,13 @@ JudgeFeed:
     ld a, c
     and $1F
     jp z, .loop             ; entrada de relleno
+    push bc
+    ld hl, wMapJ            ; su bit del mapa: si se dibujó alineada, se borra en ese lugar (GemEraseStart)
+    call MapTake
+    ld [wJAlign], a
+    pop bc
+    ld a, c
+    and $1F
     call MirrorLanes
     ld b, a                 ; B = carriles
     xor a
@@ -175,6 +187,12 @@ JudgeFeed:
     add hl, de
     ld a, [wTmpStar]
     ld [hl], a
+    ld hl, wJQAlign
+    add hl, de
+    ld a, [wJAlign]
+    ld [hl], a
+    xor a
+    ld [wJAlign], a
     ld hl, wJQFLo
     add hl, de
     ld a, [wJFrame]

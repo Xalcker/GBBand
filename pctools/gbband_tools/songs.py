@@ -26,7 +26,10 @@ import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
+from bandcore import sharedcharts
+
 from . import audio_gb as gb
+from . import layout
 from . import chart as charts
 from . import drums as drums_mod
 from . import famitext, gbaudio, ir
@@ -122,9 +125,16 @@ def truncated(song: ir.SongIR, frames: int) -> ir.SongIR:
 
 
 def auto_charts(song: ir.SongIR, grid: charts.BeatGrid, assignment: dict | None, lead_in: int = LEAD_IN,
-                stats: dict | None = None) -> dict[str, list[charts.ChartNote]]:
+                stats: dict | None = None, song_dir: Path | None = None) -> dict[str, list[charts.ChartNote]]:
     """Los charts que genera el importador (sin las ediciones a mano), por clave "instrumento/dificultad". La batería sale
-    de la asignación de papeles (drums.json) y solo existe si algún golpe tiene papel."""
+    de la asignación de papeles (drums.json) y solo existe si algún golpe tiene papel.
+
+    Si la canción tiene charts.json (el chart de NESBand, ver bandcore.sharedcharts), son esos tal cual, batería incluida:
+    así se toca lo mismo en las cuatro consolas. Las notas del mismo carril que quedan muy juntas para la colocación B se
+    dibujan alineadas a la fila (chart.aligned_frames), en vez de moverlas de carril."""
+    shared = sharedcharts.load(song_dir, lead_in) if song_dir is not None else None
+    if shared is not None:
+        return dict(shared.charts)
     result: dict[str, list[charts.ChartNote]] = {}
     hits = drums_mod.drum_hits(song, assignment) if assignment else []
     for instrument, channel in INSTRUMENTS:
@@ -141,8 +151,12 @@ def auto_charts(song: ir.SongIR, grid: charts.BeatGrid, assignment: dict | None,
     return result
 
 
-def beat_grid(song: ir.SongIR, beat_frames: int | None) -> charts.BeatGrid:
-    """La rejilla de tiempos: la del proyecto de FamiStudio es confiable; la de un NSF se estima de los ataques."""
+def beat_grid(song: ir.SongIR, beat_frames: int | None, song_dir: Path | None = None) -> charts.BeatGrid:
+    """La rejilla de tiempos: la del chart compartido (charts.json) si la canción lo tiene; si no, la del proyecto de
+    FamiStudio, que es confiable; la de un NSF se estima de los ataques."""
+    shared = sharedcharts.load(song_dir, 0) if song_dir is not None else None
+    if shared is not None:
+        return charts.BeatGrid(shared.frames_per_beat, shared.first_beat)
     if song.frames_per_beat and not beat_frames:
         return charts.estimate_beat([0], song.frames_per_beat)
     return charts.estimate_beat([n.frame for ch in song.notes.values() for n in charts.merge_attacks(ch)], beat_frames)
@@ -158,14 +172,14 @@ def import_song(options: Options, root: Path = ROOT) -> list[str]:
     title = gb_text(options.title or default_title or name, TITLE_LEN)
     game = gb_text(options.game or default_game, GAME_LEN)
     summary: list[str] = []
-    grid = beat_grid(song, options.beat_frames)
+    grid = beat_grid(song, options.beat_frames, out_dir)
 
     # El trabajo manual sobrevive: asignación de la batería y ediciones de los charts
     kept = {n: (out_dir / n).read_text(encoding="utf-8") for n in (EDITS_FILE, drums_mod.DRUMS_FILE) if (out_dir / n).exists()}
     edits = load_edits(out_dir)
     assignment = drums_mod.load_drums(out_dir)
     drum_notes_exist = any(song.notes.get(c) for c in ir.DRUM_CHANNELS)
-    if assignment is None and drum_notes_exist:
+    if assignment is None and drum_notes_exist and not (out_dir / sharedcharts.CHARTS_FILE).exists():
         assignment = drums_mod.suggest_assignment(drums_mod.drum_groups(song))
         kept[drums_mod.DRUMS_FILE] = drums_mod.dump_drums(assignment)
         summary.append("  drums.json: asignación automática de la batería (revísala en el editor)")
@@ -193,7 +207,7 @@ def import_song(options: Options, root: Path = ROOT) -> list[str]:
     chart_files: dict[str, bytes] = {}
     instrument_mask = 0
     stats: dict = {}
-    automatic = auto_charts(song, grid, assignment, lead_in, stats)
+    automatic = auto_charts(song, grid, assignment, lead_in, stats, out_dir)
     for index, (instrument, channel) in enumerate(INSTRUMENTS):
         counts = []
         for difficulty in charts.DIFFICULTIES:
@@ -204,7 +218,8 @@ def import_song(options: Options, root: Path = ROOT) -> list[str]:
             if edits.get(key):
                 chart = apply_edits(chart, edits[key], warn=lambda text, key=key: summary.append(f"  AVISO edits.json ({key}): {text}"))
             validate_chart(key, chart)
-            chart_files[f"chart_{instrument}_{difficulty.name}.bin"] = charts.chart_bytes(chart)
+            chart_files[f"chart_{instrument}_{difficulty.name}.bin"] = charts.chart_bytes(
+                chart, layout.speed_8_8(difficulty.name), instrument == "bateria")
             counts.append(f"{difficulty.name} {len(chart)}")
         if counts:
             instrument_mask |= 1 << index

@@ -58,6 +58,7 @@ class SongData:
     charts: dict  # (instrumento, dificultad) -> [(cuadro, máscara de carriles)], sin las entradas de fin de cola
     tails: dict  # (instrumento, dificultad) -> {(cuadro, carril): cuadro en que termina su cola}
     note_on: dict  # canal 0-3 -> cuadros de la canción (con el lead-in) en que el stream dispara una nota
+    aligned: dict = None  # (instrumento, dificultad) -> cuadros de las notas que se dibujan alineadas a la fila (su mapa)
 
     def chart(self, instrument: str, difficulty: str) -> list[tuple[int, int]]:
         return self.charts[(instrument, difficulty)]
@@ -69,17 +70,29 @@ def load_song(name: str) -> SongData:
 
     folder = SONGS_DIR / name
     info = json.loads((folder / "info.json").read_text(encoding="utf-8"))
+    from .chart import aligned_from_bytes
+
     charts = {}
     tails = {}
+    aligned = {}
     for path in folder.glob("chart_*.bin"):
         _, instrument, difficulty = path.stem.split("_")
+        aligned[(instrument, difficulty)] = aligned_from_bytes(path.read_bytes())
         notes = entries_to_chart(parse_chart_bytes(path.read_bytes()), instrument == "bateria")
         charts[(instrument, difficulty)] = [(n.frame, n.mask & LANE_MASK) for n in notes]
         tails[(instrument, difficulty)] = {(n.frame, lane): n.end for n in notes if n.end and instrument != "bateria"
                                            for lane in lanes_of(n.mask)}
     stream = (folder / "stream_b.bin").read_bytes() + (folder / "stream_c.bin").read_bytes()
     on = gb.note_on_frames(gb.decode_stream(stream))
-    return SongData(name, info, charts, tails, {ch: [info["lead_in"] + f for f in frames] for ch, frames in on.items()})
+    return SongData(name, info, charts, tails, {ch: [info["lead_in"] + f for f in frames] for ch, frames in on.items()},
+                    aligned)
+
+
+def expected_y(frame: int, t: int, s: int, aligned: set[int] | frozenset = frozenset()) -> float:
+    """Dónde debe verse (en pantalla) la gema de la nota del cuadro `frame` en el cuadro `t`: su lugar ideal, o el de la
+    fila más cercana si va alineada (el mapa de notas alineadas, chart.aligned_frames), que puede estar hasta a 4 px."""
+    ideal = layout.HIT_Y - (frame - t) * s / 256
+    return ideal + layout.error_px(frame, s, "A") if frame in aligned else ideal
 
 
 def select_in_menu(r: Runner, song: int, instrument: int, difficulty: int, no_fail: bool = False) -> None:
@@ -309,7 +322,8 @@ BAR_TOP_L = {BAR_TILE + 1 + 4 * (v - 1): v for v in (1, 2, 3)}        # tile de 
 BAR_BOT_L = {BAR_TILE + 3 + 4 * (v - 1): v for v in (1, 2, 3)}
 
 
-def visual_errors(r: Runner, chart: list[tuple[int, int]], s: int, t: int, scheme: str) -> list[float]:
+def visual_errors(r: Runner, chart: list[tuple[int, int]], s: int, t: int, scheme: str,
+                  aligned: set[int] | frozenset = frozenset()) -> list[float]:
     """Error (px, dibujada menos ideal) de cada gema visible del chart en el cuadro mostrado `t`.
 
     Lee el mapa del fondo de VRAM y el SCY real del hardware. Una gema del carril `l` se reconoce por su tile
@@ -340,7 +354,7 @@ def visual_errors(r: Runner, chart: list[tuple[int, int]], s: int, t: int, schem
             lane_gems[l].append(float((bg_y - scy) % 256))
     for frame, mask in chart:
         for l in lanes_of(mask):
-            ideal = layout.HIT_Y - (frame - t) * s / 256
+            ideal = expected_y(frame, t, s, aligned)   # (una nota alineada se mide contra su fila)
             if not -4 <= ideal <= 116:
                 continue
             near = [(abs((y - ideal + 128) % 256 - 128), y) for y in lane_gems[l]]
@@ -352,7 +366,8 @@ def visual_errors(r: Runner, chart: list[tuple[int, int]], s: int, t: int, schem
     return errors
 
 
-def gems_after_hit(r: Runner, chart: list[tuple[int, int]], s: int, t: int, lo: int = 8, hi: int = 16) -> tuple[int, int]:
+def gems_after_hit(r: Runner, chart: list[tuple[int, int]], s: int, t: int, lo: int = 8, hi: int = 16,
+                   aligned: set[int] | frozenset = frozenset()) -> tuple[int, int]:
     """Notas del chart que debían tocarse hace `lo` a `hi` cuadros (ya cruzaron la línea de golpe): cuántas son y cuántas
     siguen dibujadas en el fondo (una gema de su carril a menos de 3 px de su posición). Con el bot perfecto la gema
     acertada se borra; sin tocar, sigue ahí."""
@@ -383,7 +398,7 @@ def gems_after_hit(r: Runner, chart: list[tuple[int, int]], s: int, t: int, lo: 
         if not lo <= t - frame <= hi:
             continue
         for l in lanes_of(mask):
-            ideal = layout.HIT_Y - (frame - t) * s / 256
+            ideal = expected_y(frame, t, s, aligned)
             checked += 1
             drawn += any(abs((y - ideal + 128) % 256 - 128) < 3 for y in lane_gems[l])
     return checked, drawn
@@ -465,6 +480,7 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
     data = load_song(song)
     info = data.info
     chart = data.chart(instrument, difficulty)
+    aligned = data.aligned.get((instrument, difficulty), set())
     channel = INSTRUMENTS.index(instrument)
     s = layout.speed_8_8(difficulty)
     options = options or {}
@@ -557,11 +573,11 @@ def run_case(rom: Path, mode: str, song: str, instrument: str, difficulty: str, 
             isr = r.read("wIsrLast")[0]
             isr_hist[isr] = isr_hist.get(isr, 0) + 1
             if check_erase and n % 4 == 0:
-                c, d = gems_after_hit(r, chart, s, n)
+                c, d = gems_after_hit(r, chart, s, n, aligned=aligned)
                 state["erase_checked"] += c
                 state["erase_drawn"] += d
             if visual and n % 5 == 0 and lead_in - 150 < n < info["end_frame"] - 200:
-                errors.extend(e for e in visual_errors(r, chart, s, n, "B") if e != float("inf"))
+                errors.extend(e for e in visual_errors(r, chart, s, n, "B", aligned) if e != float("inf"))
             if n == info["end_frame"] - 120:
                 result.nr51_late = r.read("sh_NR51")[0]
                 result.muted_late = bool(r.read("wMuted")[0])
@@ -741,10 +757,17 @@ def run_practice(rom: Path, mode: str, song: str, instrument: str, difficulty: s
                              "air": r.read("wAirCount")[0], "units": int.from_bytes(r.read("wScoreUnits", 2), "little")}
             if state["marks"] and t >= state["marks"][0][0] and not state["timeline"]:
                 _, which = state["marks"].pop(0)
+                # suelta los carriles antes de pausar: si A (un carril) siguiera apretado, la marca A no sería un botón nuevo
+                for lane in list(state["held"]):
+                    r.pb.send_input(RELEASE[lane], 1)
+                state["held"].clear()
+                state["releases"].clear()
                 btn_press = WindowEvent.PRESS_BUTTON_A if which == "a" else WindowEvent.PRESS_BUTTON_B
                 btn_rel = WindowEvent.RELEASE_BUTTON_A if which == "a" else WindowEvent.RELEASE_BUTTON_B
+                # Start 4 cuadros: con 2, si el apretar y el soltar caen en el mismo tick de PyBoy (dos ISR en un tick) el
+                # juego nunca lo ve apretado (PyBoy aplica la entrada al empezar el tick, ver CLAUDE.md)
                 state["timeline"][now_h] = WindowEvent.PRESS_BUTTON_START
-                state["timeline"][now_h + 2] = WindowEvent.RELEASE_BUTTON_START
+                state["timeline"][now_h + 4] = WindowEvent.RELEASE_BUTTON_START
                 state["timeline"][now_h + 10] = btn_press
                 state["timeline"][now_h + 12] = btn_rel
                 state["prev_t"] = None

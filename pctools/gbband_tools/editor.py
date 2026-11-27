@@ -120,7 +120,7 @@ def load_song_source(name: str, root: Path = ROOT) -> SongSource:
         song, _, _ = songs.load_source(root / options["source"], songs.Options(name=name, **options))
         songs.cache_ir(root, name, song)
     info = json.loads((song_dir / "info.json").read_text(encoding="utf-8"))
-    return SongSource(name, song_dir, options, song, songs.beat_grid(song, options.get("beat_frames")), info)
+    return SongSource(name, song_dir, options, song, songs.beat_grid(song, options.get("beat_frames"), song_dir), info)
 
 
 def drum_assignment(src: SongSource, override: dict | None = None) -> tuple[dict, bool]:
@@ -136,7 +136,7 @@ def drum_assignment(src: SongSource, override: dict | None = None) -> tuple[dict
 
 
 def auto_charts(src: SongSource, assignment: dict | None = None) -> dict[str, list[ChartNote]]:
-    return songs.auto_charts(src.song, src.grid, drum_assignment(src, assignment)[0], songs.LEAD_IN)
+    return songs.auto_charts(src.song, src.grid, drum_assignment(src, assignment)[0], songs.LEAD_IN, song_dir=src.song_dir)
 
 
 def edited_charts(src: SongSource, auto: dict[str, list[ChartNote]], edits: dict | None = None) -> tuple[dict, list[str]]:
