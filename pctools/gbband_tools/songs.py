@@ -169,6 +169,9 @@ def import_song(options: Options, root: Path = ROOT) -> list[str]:
     source = (root / options.source) if not Path(options.source).is_absolute() else Path(options.source)
     out_dir = root / "src" / "songs" / name
     song, default_title, default_game = load_source(source, options)
+    shared = sharedcharts.load(out_dir, 0)
+    if shared is not None and song.length_frames > shared.music_frames:   # con el chart compartido, su duración
+        song = truncated(song, shared.music_frames)
     title = gb_text(options.title or default_title or name, TITLE_LEN)
     game = gb_text(options.game or default_game, GAME_LEN)
     summary: list[str] = []
