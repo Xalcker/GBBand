@@ -179,3 +179,16 @@ Decisiones menores que tomé yo, con su motivo. Las de gran tamaño se proponen 
     ROM (PyBoy, DMG y CGB, bot perfecto): 100 %, sincronía exacta, sin desbordes de la ISR. **No se probó con ningún VGM ni
     GBS comercial real**, igual que con los NSF. En los `.m3u` de GBS, `--track` usa el número tal como viene (suelen contar
     desde 0; si el `.m3u` no tiene pista 0, se cuenta desde 1).
+29. **El chart de NESBand y el dibujo mixto (2026-11-26).** Para que una canción se sienta igual en las cuatro consolas,
+    las incluidas usan el chart de NESBand tal cual (`charts.json`, `bandcore.sharedcharts`; se copia con
+    `band sync-charts`), batería incluida, con su tempo y su duración: ya no se generan aquí ni se mueven notas de carril
+    (`enforce_lane_gap` solo queda para los charts que se generan aquí). Ese chart trae notas del mismo carril más juntas
+    que los 16 px de la colocación B (hasta 5 cuadros en experto), así que esas notas se dibujan **alineadas a la fila**
+    (como la colocación A: una sola fila, a menos de 4 px de su lugar). Qué notas se alinean lo calcula la PC al importar
+    (`chart.aligned_frames`: 2,3 % en medio, 3,6 % en difícil y experto, ninguna en fácil; en la batería el bombo cuenta
+    en los cinco carriles porque su barra los cruza, `chart.drawn_mask`) y va en un **mapa de bits después del fin del
+    chart**, un bit por entrada con carriles (`chart.align_map`): las entradas de 2 bytes no cambian. La ROM solo lee el
+    bit: `MapInit` busca el mapa al empezar y el armador de filas (`FetchNote`), el juez (para borrar la gema en el mismo
+    lugar) y `PracticeSeek` llevan cada uno su cursor. Experto sube de 1.3 a 1.25 s de anticipación (396 -> 411, 1.6 px
+    por cuadro) para que las notas a 5 cuadros quepan alineadas (8 px). `test_cancion_coherente` revisa con el mapa que
+    ninguna gema pise otra en las 10 canciones.

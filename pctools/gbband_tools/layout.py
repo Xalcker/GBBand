@@ -20,7 +20,9 @@ HIT_Y = 120  # y (en pantalla) de la parte de arriba de la gema cuando suena: fi
 TRAVEL = 120  # píxeles que recorre una nota desde el borde de arriba hasta la línea de golpe
 FPS = 59.7275  # 70224 ciclos T por cuadro a 4 194 304 Hz
 LANES = 5
-ANTICIPATION = {"facil": 2.6, "medio": 2.2, "dificil": 1.7, "experto": 1.3}  # segundos (igual que NESBand)
+# Segundos que se ve una nota antes de tocarla (como NESBand). Experto es 1.25 y no 1.3: a 1.6 px por cuadro dos notas
+# del mismo carril a 5 cuadros (lo más junto del chart de NESBand) caben alineadas a la fila (ver chart.aligned_frames)
+ANTICIPATION = {"facil": 2.6, "medio": 2.2, "dificil": 1.7, "experto": 1.25}
 DIFFICULTIES = list(ANTICIPATION)
 
 
@@ -63,13 +65,16 @@ def error_px(frame: int, s: int, scheme: str) -> float:
     return drawn_y(place(frame, s, scheme)) - y_fix(frame, s) / 256
 
 
-def conflicts(notes: list[tuple[int, int]], s: int, scheme: str, tile_rows: bool = True) -> int:
+def conflicts(notes: list[tuple[int, int]], s: int, scheme: str, tile_rows: bool = True,
+              aligned: set[int] | None = None) -> int:
     """Pares consecutivos de notas del mismo carril cuyas gemas comparten una fila de tiles.
-    `notes` = [(cuadro, máscara de carriles)]. Una nota con conflicto no se puede dibujar bien."""
+    `notes` = [(cuadro, máscara de carriles)]. Una nota con conflicto no se puede dibujar bien.
+    `aligned`: cuadros de las notas que se dibujan alineadas a la fila (A) aunque el resto vaya en `scheme` (el mapa
+    de chart.aligned_frames que la ROM lee junto al chart)."""
     last: dict[int, set[int]] = {}
     count = 0
     for frame, mask in notes:
-        rows = set(place(frame, s, scheme).rows)
+        rows = set(place(frame, s, "A" if aligned and frame in aligned else scheme).rows)
         for lane in range(LANES):
             if mask >> lane & 1:
                 if lane in last and last[lane] & rows:

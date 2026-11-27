@@ -1,8 +1,10 @@
 """Charts de GBBand: el generador común está en bandcore (`bandcore.chart`, ahí se explica cómo se arma un chart).
 
 Lo que cambia en la Game Boy: con la colocación B de las gemas (layout.py), dos notas del mismo carril necesitan una
-separación mínima en píxeles (21, 18, 14 y 11 cuadros de fácil a experto); `enforce_lane_gap` las mueve de carril o
-las quita, y `build_chart` lo aplica antes de las colas. Los charts van en binario (`chart_bytes`, `parse_chart`).
+separación mínima en píxeles (21, 18, 14 y 10 cuadros de fácil a experto). En los charts que se generan aquí,
+`enforce_lane_gap` las mueve de carril o las quita; el chart compartido de NESBand (charts.json) no se toca: sus notas
+muy juntas se dibujan alineadas a la fila (`aligned_frames`, el mapa `align_map` que va después del chart; ver
+docs/decisiones.md, punto 29). Los charts van en binario (`chart_bytes`, `parse_chart`).
 """
 
 from __future__ import annotations
@@ -79,9 +81,88 @@ def build_chart(
     ]
 
 
-def chart_bytes(chart: list[ChartNote]) -> bytes:
-    """El chart tal como va en la ROM: pares (cuadros desde la entrada anterior, carriles) y el fin (0, $FF)."""
-    return bytes(b for entry in chart_entries(chart) for b in entry)
+def drawn_mask(mask: int, drums: bool) -> int:
+    """Los carriles cuyas columnas ocupa la nota al dibujarse: en la batería el bombo (carril 4) es una barra que cruza
+    los cinco, así que pisa las gemas de cualquier carril en sus filas."""
+    return 0x1F if drums and mask & 0x10 else mask
+
+
+def aligned_frames(chart: list[ChartNote], s: int, drums: bool = False) -> set[int]:
+    """Cuadros de las notas que se dibujan alineadas a la fila (colocación A) en vez de con desplazamiento (B).
+
+    Con la colocación B una gema puede ocupar dos filas de tiles, y dos gemas del mismo carril no pueden compartir un
+    tile. El chart compartido (el de NESBand) trae notas del mismo carril más juntas que eso (hasta 5 cuadros en
+    experto), así que esas se alinean a la fila: ocupan una sola y quedan a menos de 4 px de su lugar. Se repite
+    hasta que no quede ningún par del mismo carril que se pise; si aun alineadas no caben, se dejan así (pasa con
+    CAIDA DE NOTAS más lenta, no con la velocidad de cada dificultad)."""
+    aligned: set[int] = set()
+    for _ in range(len(chart) + 1):
+        changed = False
+        last: dict[int, tuple[int, set[int]]] = {}
+        for note in chart:
+            rows = set(layout.place(note.frame, s, "A" if note.frame in aligned else "B").rows)
+            mask = drawn_mask(note.mask, drums)
+            for lane in range(5):
+                if not mask >> lane & 1:
+                    continue
+                if lane in last and last[lane][1] & rows:
+                    prev = last[lane][0]
+                    if note.frame not in aligned:
+                        aligned.add(note.frame)
+                        changed = True
+                    elif prev not in aligned:
+                        aligned.add(prev)
+                        changed = True
+                last[lane] = (note.frame, rows)
+        if not changed:
+            break
+    return aligned
+
+
+def chart_bytes(chart: list[ChartNote], s: int | None = None, drums: bool = False) -> bytes:
+    """El chart tal como va en la ROM: pares (cuadros desde la entrada anterior, carriles) y el fin (0, $FF), y después
+    el mapa de las notas alineadas (`align_map`), que la ROM lee con su propio cursor."""
+    entries = chart_entries(chart)
+    return bytes(b for entry in entries for b in entry) + align_map(entries, aligned_frames(chart, s, drums) if s else set())
+
+
+def aligned_from_bytes(data: bytes) -> set[int]:
+    """Inversa de align_map: los cuadros de las notas que el chart en binario (con su mapa) dibuja alineadas."""
+    frames: list[tuple[int, bool]] = []
+    frame = 0
+    end = 0
+    for i in range(0, len(data), 2):
+        delta, mask = data[i], data[i + 1]
+        if mask == CHART_END:
+            end = i + 2
+            break
+        frame += delta
+        if mask & 0x1F:
+            frames.append((frame, bool(mask & END_FLAG)))
+    bitmap = data[end:]
+    return {f for i, (f, is_end) in enumerate(frames)
+            if not is_end and i // 8 < len(bitmap) and bitmap[i // 8] >> (i % 8) & 1}
+
+
+def align_map(entries: list[tuple[int, int]], aligned: set[int]) -> bytes:
+    """Un bit por cada entrada con carriles (notas y fines de cola, en orden; los rellenos no cuentan): 1 = la nota se
+    dibuja alineada a la fila (colocación A), 0 = con desplazamiento (B). El bit 0 de cada byte va primero. Se rellena
+    a un número par de bytes para que el archivo siga siendo de pares."""
+    bits = []
+    frame = 0
+    for delta, mask in entries:
+        if mask == CHART_END:
+            break
+        frame += delta
+        if mask & 0x1F:
+            bits.append(not mask & END_FLAG and frame in aligned)
+    data = bytearray((len(bits) + 7) // 8)
+    for i, bit in enumerate(bits):
+        if bit:
+            data[i // 8] |= 1 << (i % 8)
+    if len(data) % 2:
+        data.append(0)
+    return bytes(data)
 
 
 def enforce_lane_gap(notes: list[Note], masks: list[int], difficulty: Difficulty, move: bool = True,

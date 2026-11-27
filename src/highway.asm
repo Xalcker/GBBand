@@ -17,10 +17,10 @@ SECTION "Highway", ROM0
 
 DEF HIT_Y EQU 120               ; la línea de golpe: fila de tiles 15, justo arriba de la Window (que empieza en y = 128)
 
-; Velocidad 8.8 de cada dificultad (px/cuadro): 120 px en 2.6, 2.2, 1.7 y 1.3 s a 59.7275 Hz.
+; Velocidad 8.8 de cada dificultad (px/cuadro): 120 px en 2.6, 2.2, 1.7 y 1.25 s a 59.7275 Hz.
 ; Debe coincidir con layout.speed_8_8 (lo comprueba una prueba de pytest).
 SpeedTable:
-    dw 198, 234, 303, 396
+    dw 198, 234, 303, 411
 StepsPer4: db 4, 3, 2, 5        ; pasos de la canción cada 4 cuadros reales, de 100%, 75%, 50% y 125%
 
 GemBase:    db TILE_GEM, TILE_GEM + GEM_STRIDE, TILE_GEM + 2 * GEM_STRIDE, TILE_GEM + 3 * GEM_STRIDE, TILE_GEM + 4 * GEM_STRIDE
@@ -33,10 +33,13 @@ IF PLACEMENT_B
 ELSE
     DEF ROUND_HI EQU 4
 ENDC
+DEF ROUND_ROW EQU 4             ; redondeo de una nota alineada a la fila (como la colocación A)
 
 ; ---- Inicio -------------------------------------------------------------------------------
 ; Con el LCD apagado y el banco de la canción activo.
 HighwayInit:
+    xor a
+    ld [wNAlign], a
     ld a, [wOptFall]        ; CAIDA DE NOTAS: 0 = la de la dificultad elegida; 1 a 4 = la de facil a experto
     and a
     jr z, .auto
@@ -121,6 +124,7 @@ HighwayInit:
     ld [wBCur + 1], a
     ld [wJCur + 1], a
 
+    call MapInit
     ld a, [wPracFromP]
     and a
     call nz, PracticeSeek
@@ -224,6 +228,9 @@ FetchNote:
     ld a, [wNMask]
     and a
     jr z, .again            ; entrada de relleno: solo avanza el tiempo
+    ld hl, wMapB            ; su bit del mapa: 1 = alineada a la fila (va muy junta de otra del mismo carril)
+    call MapTake
+    ld [wNAlign], a
 
     ; q = HIT_Y*256 - Fs  (24 bits con signo) y se redondea
     ld hl, wBFs
@@ -237,17 +244,29 @@ FetchNote:
     ld a, 0
     sbc [hl]
     ld d, a                 ; D = byte alto
+    ld a, [wNAlign]
+    and a
     ld a, e
+    jr nz, .alignRound
     add ROUND_HI
-    ld e, a
+    jr .rounded
+.alignRound:
+    add ROUND_ROW
+.rounded:
+    ld e, a                 ; (ld y jr no tocan el acarreo de la suma)
     jr nc, .noCarry
     inc d
 .noCarry:
     ld h, d                 ; HL = V = (q + redondeo) >> 8, en píxeles con signo
     ld l, e
 IF PLACEMENT_B
+    ld a, [wNAlign]
+    and a
+    ld a, 0
+    jr nz, .offset          ; alineada: sin desplazamiento, una sola fila
     ld a, l
     and %110
+.offset:
 ELSE
     xor a
 ENDC
@@ -264,10 +283,65 @@ ENDC
     ld [wNRow], a
     ld a, h
     ld [wNRow + 1], a
+    xor a
+    ld [wNAlign], a
     ret
 .end:
     xor a
     ld [wNMask], a
+    ret
+
+; ---- Mapa de las notas alineadas ---------------------------------------------------------------
+; Después del fin del chart ($00, $FF) va un mapa con un bit por entrada con carriles (notas y fines de cola, en orden;
+; el bit 0 de cada byte va primero): 1 = la nota se dibuja alineada a la fila, 0 = con desplazamiento (colocación B).
+; Lo calcula la PC al importar (chart.aligned_frames). El armador de filas (wMapB) y el juez (wMapJ) lo leen cada uno
+; con su cursor, al mismo paso que su cursor del chart.
+
+; DE = chart: pone los dos cursores al principio de su mapa (recorre el chart hasta el fin; con el LCD apagado)
+MapInit:
+    ld h, d
+    ld l, e
+.scan:
+    inc hl                  ; (los cuadros)
+    ld a, [hl+]             ; los carriles
+    cp $FF
+    jr nz, .scan
+    ld a, l
+    ld [wMapB], a
+    ld [wMapJ], a
+    ld a, h
+    ld [wMapB + 1], a
+    ld [wMapJ + 1], a
+    ld a, 1
+    ld [wMapBBit], a
+    ld [wMapJBit], a
+    ret
+
+; HL = cursor (wMapB o wMapJ): A = 1 si la entrada actual va alineada, 0 si no, y pasa a la siguiente. Cambia BC, E, HL.
+MapTake:
+    ld a, [hl+]
+    ld c, a
+    ld a, [hl+]
+    ld b, a                 ; BC = byte del mapa
+    ld a, [bc]
+    and [hl]                ; su bit
+    ld e, a
+    ld a, [hl]
+    rlca                    ; el bit siguiente; con acarreo, el primero del byte siguiente
+    ld [hl], a
+    jr nc, .done
+    dec hl
+    dec hl
+    inc bc
+    ld a, c
+    ld [hl+], a
+    ld a, b
+    ld [hl], a
+.done:
+    ld a, e
+    and a
+    ret z
+    ld a, 1
     ret
 
 ; B * DE (B = cuadros, DE = velocidad 8.8) -> C:H:L (24 bits). Suma y desplazamiento, 8 pasos.
@@ -722,6 +796,10 @@ GemEraseStart:
     add hl, de
     ld a, [hl]
     ld [wMulF + 1], a
+    ld hl, wJQAlign
+    add hl, de
+    ld a, [hl]
+    ld [wErAlignTmp], a
     ld hl, wJQSus
     add hl, de
     ld a, [hl]
@@ -737,11 +815,26 @@ GemEraseStart:
     inc hl
     ld a, HIGH(HIT_Y * 256)
     sbc [hl]
+    ld e, a
+    ld a, [wErAlignTmp]
+    and a
+    ld a, e
+    jr nz, .alignRound
     add ROUND_HI            ; (el byte alto no hace falta: la fila va módulo 32)
 IF PLACEMENT_B
     ld e, a
     and %110
+    jr .rounded
+.alignRound:
+    add ROUND_ROW           ; alineada a la fila, como la dibujó FetchNote: sin desplazamiento
+    ld e, a
+    xor a
+.rounded:
 ELSE
+    jr .roundedA
+.alignRound:
+    add ROUND_ROW
+.roundedA:
     ld e, a
     xor a
 ENDC

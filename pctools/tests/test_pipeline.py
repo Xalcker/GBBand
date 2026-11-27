@@ -114,17 +114,19 @@ def test_error_de_colocacion():
 def test_separacion_minima_del_mismo_carril():
     # En B una gema puede cruzar dos filas: 16 px; en A, 8 px
     s = layout.speed_8_8("experto")
-    assert layout.min_lane_gap_frames(s, "A") == 6
-    assert layout.min_lane_gap_frames(s, "B") == 11
+    assert layout.min_lane_gap_frames(s, "A") == 5   # experto a 1.6 px por cuadro: caben las notas a 5 cuadros
+    assert layout.min_lane_gap_frames(s, "B") == 10
     assert layout.conflicts([(1000, 1), (1001, 1)], s, "B") == 1  # pegadas: comparten tiles
-    assert layout.conflicts([(1000, 1), (1000 + 11, 1)], s, "B") == 0  # a la separación mínima nunca chocan
+    assert layout.conflicts([(1000, 1), (1000 + 10, 1)], s, "B") == 0  # a la separación mínima nunca chocan
     assert layout.conflicts([(1000, 1), (1001, 2)], s, "B") == 0  # en carriles distintos no importa
 
 
 def test_chart_ida_y_vuelta():
     chart = [charts.ChartNote(10, 1), charts.ChartNote(300, 0b10100), charts.ChartNote(301, 8), charts.ChartNote(900, 2)]
     data = charts.chart_bytes(chart)
-    assert data[-2:] == bytes([0, 0xFF])
+    end = 2 * len(charts.chart_entries(chart))
+    assert data[end - 2:end] == bytes([0, 0xFF])   # después del fin va el mapa de las notas alineadas (2 bytes aquí)
+    assert data[end:] == bytes([0, 0]) and len(data) % 2 == 0
     assert [mask for _, mask in charts.parse_chart(data)] == [1, 0b10100, 8, 2]
     assert max(data[0::2]) <= 255  # deltas de un byte (con rellenos de 255 cuando hace falta)
 
@@ -176,7 +178,11 @@ def test_cancion_coherente(song):
                 lanes = {b for b in range(5) if lane_mask >> b & 1}
                 assert not any({x, y} in blocked for x in lanes for y in lanes), f"acorde imposible en {frame}"
                 assert max(lanes) < {"facil": 3, "medio": 4}.get(difficulty, 5) or instrument == "bateria"
-            assert layout.conflicts(chart, layout.speed_8_8(difficulty), "B") == 0, "gemas del mismo carril que se pisan"
+            # con el mapa de notas alineadas que va junto al chart (lo que dibuja la ROM), ninguna gema pisa otra
+            aligned = charts.aligned_from_bytes((ROOT / "src" / "songs" / song / f"chart_{instrument}_{difficulty}.bin").read_bytes())
+            drawn = [(f, charts.drawn_mask(m, instrument == "bateria")) for f, m in chart]   # (el bombo cruza los carriles)
+            assert layout.conflicts(drawn, layout.speed_8_8(difficulty), "B", aligned=aligned) == 0, \
+                "gemas del mismo carril que se pisan"
     # cada nota del chart de un instrumento tiene su alta de nota en el canal del instrumento, en el mismo cuadro
     for index, instrument in enumerate(playtest.INSTRUMENTS):
         for difficulty in layout.DIFFICULTIES:
