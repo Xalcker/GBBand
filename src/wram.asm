@@ -146,6 +146,7 @@ wStarFail::     ds 1     ; ya se falló una nota de la frase en curso
 wHoldTick::     ds 5
 wNEnd::         ds 1     ; la entrada que se leyó es un fin de cola
 wNSust::        ds 1     ; la nota que se leyó tiene cola
+wNCym::         ds 1     ; batería: la nota que se leyó es un platillo (bit $40 del chart)
 wTailOpen::     ds 1     ; carriles con una cola abierta en la fila que se arma
 wPressLanes::   ds 1
 wTryBit::       ds 1

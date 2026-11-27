@@ -12,6 +12,10 @@ Tiles por carril (14), desde TILE_GEM + 14*carril:
   6-9    desplazamiento 4
   10-13  desplazamiento 6
 La colocación A solo usa los tiles 0-1 de cada carril.
+
+Los platillos de la batería (experto, bit $40 del chart) usan otros 14 tiles con la misma organización, desde
+TILE_CYMBAL: una elipse plana con la campana al centro, igual en todos los carriles (en CGB el color lo da la paleta
+del carril; en DMG, la forma dice que es platillo y la columna, qué pad).
 """
 
 from __future__ import annotations
@@ -42,6 +46,27 @@ def gem_art(lane: int) -> list[str]:
                 inner[c] = "1"
         rows.append("13" + "".join(inner) + "31")
     rows.append(rows[0])
+    return rows
+
+
+TILE_CYMBAL = 0xD0
+
+# Media anchura de la elipse del platillo por fila (desde el centro, entre las columnas 7 y 8): 0 = vacía
+CYMBAL_HALF = [0, 3, 5, 6, 6, 5, 3, 0]
+
+
+def cymbal_art() -> list[str]:
+    """El platillo: elipse plana (borde 3, relleno 2) con la campana (color 1) al centro, entre las líneas del carril."""
+    rows = []
+    for r, half in enumerate(CYMBAL_HALF):
+        row = [BG_LEFT[0]] + ["."] * 14 + [BG_RIGHT[-1]]
+        for c in range(8 - half, 8 + half):
+            edge = c < 8 - half + 2 or c >= 8 + half - 2 or half <= 3
+            row[c] = "3" if edge else "2"
+        if r in (3, 4):
+            for c in range(6, 10):
+                row[c] = "1"
+        rows.append("".join(row))
     return rows
 
 
@@ -118,4 +143,19 @@ def build_gems_tiles() -> str:
     for name, rows in bar_tiles():
         lines.append(f"# {name}")
         lines += rows
+    lines.append(f"@{TILE_CYMBAL:02X}  ; platillo de la batería (experto): desp 0 izq")
+    for i, (name, rows) in enumerate(variant_tiles(cymbal_art())):
+        if i:
+            lines.append(f"# platillo: {name}")
+        lines += rows
     return "\n".join(lines) + "\n"
+
+
+def variant_tiles(art: list[str]) -> list[tuple[str, list[str]]]:
+    """Los 14 tiles de una gema: desplazamiento 0 (izquierda, derecha) y 2, 4 y 6 (arriba y abajo de cada lado)."""
+    tl, tr, _, _ = shifted_tiles(art, 0)
+    tiles = [("desp 0 izq", tl), ("desp 0 der", tr)]
+    for k in (2, 4, 6):
+        a, b, c, d = shifted_tiles(art, k)
+        tiles += [(f"desp {k} arriba izq", a), (f"desp {k} arriba der", b), (f"desp {k} abajo izq", c), (f"desp {k} abajo der", d)]
+    return tiles

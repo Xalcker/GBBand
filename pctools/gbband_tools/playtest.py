@@ -297,6 +297,14 @@ BOTS = {"perfecto": PerfectBot, "sostiene": HoldBot, "sin-tocar": IdleBot, "mach
 # ---------------------------------------------------------------------------- medición visual
 
 BAR_TILE = 0xA6
+CYMBAL_TILE = 0xD0   # platillo de la batería: 14 tiles como los de una gema, iguales en todos los carriles
+
+
+def gem_variant(tile: int, lane: int) -> int:
+    """Índice del tile dentro de los 14 de una gema del carril `lane` (o de un platillo); fuera de rango si no es gema."""
+    if CYMBAL_TILE <= tile < CYMBAL_TILE + 14:
+        return tile - CYMBAL_TILE
+    return tile - 0x60 - 14 * lane
 BAR_TOP_L = {BAR_TILE + 1 + 4 * (v - 1): v for v in (1, 2, 3)}        # tile de arriba izquierda de la barra -> desplazamiento / 2
 BAR_BOT_L = {BAR_TILE + 3 + 4 * (v - 1): v for v in (1, 2, 3)}
 
@@ -316,7 +324,7 @@ def visual_errors(r: Runner, chart: list[tuple[int, int]], s: int, t: int, schem
         col = 5 + 2 * l
         for row in range(32):
             tile = r.pb.memory[0x9800 + row * 32 + col]
-            k = tile - 0x60 - 14 * l
+            k = gem_variant(tile, l)
             if k in top_idx and k in (0, 2, 6, 10):  # la mitad izquierda de arriba
                 bg_y = row * 8 + 2 * top_idx[k]
             elif k in bot_idx and k in (4, 8, 12):  # la mitad izquierda de abajo
@@ -356,7 +364,7 @@ def gems_after_hit(r: Runner, chart: list[tuple[int, int]], s: int, t: int, lo: 
         col = 5 + 2 * l
         for row in range(32):
             tile = r.pb.memory[0x9800 + row * 32 + col]
-            k = tile - 0x60 - 14 * l
+            k = gem_variant(tile, l)
             if k in top_idx:
                 bg_y = row * 8 + 2 * top_idx[k]
             elif k in bot_idx:

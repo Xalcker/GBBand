@@ -192,13 +192,15 @@ FetchNote:
 .notEnd:
     ld [wNEnd], a           ; 1 = esta entrada cierra la cola de sus carriles
     xor a
+    ld [wNCym], a
     bit 6, c
     jr z, .noSust
     ld a, [wInstrument]     ; en la batería el bit $40 es un platillo, no una cola
     cp 3
-    ld a, 0
-    jr z, .noSust
-    inc a
+    ld a, 1
+    jr nz, .noSust          ; (ld no toca las banderas) fuera de la batería: cola
+    ld [wNCym], a           ; batería: platillo (solo en experto: bandcore no lo marca en las demás)
+    xor a
 .noSust:
     ld [wNSust], a
     ld a, l
@@ -452,7 +454,12 @@ PlaceLane:
     ld d, 0
     ld hl, GemBase
     add hl, de
+    ld a, [wNCym]           ; platillo: la misma forma en todos los carriles (el color lo da la paleta del carril)
+    and a
     ld a, [hl]
+    jr z, .base
+    ld a, TILE_CYMBAL
+.base:
     ld [wPBase], a
     ld a, [wNV]
     ld e, a
